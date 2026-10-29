@@ -22,10 +22,14 @@ async function signUp(page, user) {
 
 /** Récupère le lien de vérification envoyé par l'émulateur et l'applique, comme un clic dans l'email. */
 async function verifyEmail(page, request, email) {
-  const res = await request.get(`${AUTH_EMULATOR}/emulator/v1/projects/${PROJECT}/oobCodes`);
-  const { oobCodes } = await res.json();
-  const code = oobCodes.reverse().find((c) => c.email === email && c.requestType === "VERIFY_EMAIL");
-  expect(code, "email de vérification envoyé").toBeTruthy();
+  // L'écran « vérifiez votre email » s'affiche dès la création du compte ; l'email part juste après.
+  let code;
+  await expect.poll(async () => {
+    const res = await request.get(`${AUTH_EMULATOR}/emulator/v1/projects/${PROJECT}/oobCodes`);
+    const { oobCodes } = await res.json();
+    code = oobCodes.reverse().find((c) => c.email === email && c.requestType === "VERIFY_EMAIL");
+    return Boolean(code);
+  }, { message: "email de vérification envoyé", timeout: 10_000 }).toBe(true);
   const apply = await request.post(`${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:update?key=demo-key`, {
     data: { oobCode: code.oobCode },
   });
