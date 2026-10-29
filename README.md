@@ -2,41 +2,48 @@
 
 **Une cérémonie, toute la famille, un seul endroit.**
 
-Bennoo (anciennement NioFar) aide les familles du Sénégal et de la diaspora à organiser ensemble
-leurs événements : mariages, baptêmes / ngenté, communions, anniversaires, réunions familiales.
-Parcours : Créer → Organiser → Financer → Inviter → Coordonner → Célébrer → Conserver.
+Bennoo aide les familles du Sénégal et de la diaspora à organiser ensemble leurs événements :
+mariages, baptêmes / ngenté, communions, anniversaires, réunions familiales.
 
-## État d'avancement
+## Principe technique
 
-Voir [`docs/status.md`](docs/status.md) : chaque fonctionnalité y est classée
-**Implémenté et testé**, **En cours**, **Simulé** ou **Prévu**. Rien n'est déclaré terminé sans test.
+- Site web statique (HTML, CSS, JavaScript sans étape de compilation) dans `public/`.
+- **Firebase** : Authentication (email + mot de passe), Firestore (données), Hosting.
+- La sécurité est assurée par [`firestore.rules`](firestore.rules), testées automatiquement.
 
-## Démarrer
+Voir [`docs/decisions.md`](docs/decisions.md) pour les choix et [`docs/status.md`](docs/status.md)
+pour l'état exact de chaque fonctionnalité.
 
-Voir [`docs/install.md`](docs/install.md).
+## Structure
+
+```
+public/index.html        page unique de l'application
+public/js/app.js         démarrage et navigation (#/…)
+public/js/views.js       écrans
+public/js/data.js        lectures et écritures Firestore
+public/js/lib/format.js  fonctions pures (validation, montants, dates, liens)
+public/js/config.js      configuration du projet Firebase (à compléter)
+firestore.rules          règles d'accès
+tests/unit               tests des fonctions pures
+tests/rules              tests des règles d'accès (émulateur Firestore)
+tests/e2e                parcours complet dans un navigateur (émulateurs + Playwright)
+```
+
+## Lancer en local
+
+Prérequis : Node.js 22, Java 21 (pour les émulateurs Firebase).
 
 ```bash
-npm run check      # typecheck + lint + tests + build
-npm run test:unit  # tests unitaires (sans base)
-npm run test:db    # tests des migrations sur PostgreSQL (psql requis)
+npm install
+npm run serve          # site + émulateurs sur http://127.0.0.1:5000 (aucune donnée réelle)
+npm run test:unit
+npm run test:rules
+npm run test:e2e       # nécessite : npx playwright install chromium
 ```
 
-## Architecture
+## Mettre en ligne
 
-Monolithe modulaire Next.js 16 + PostgreSQL 16 (Prisma 7). Décisions documentées dans
-[`docs/adr/`](docs/adr). Plan complet et backlog : document « Bennoo — Architecture et backlog du MVP ».
-
-```
-prisma/            schéma et migrations SQL versionnées
-src/app/           pages (App Router) et routes d'API
-src/lib/           utilitaires purs : identifiants, jetons, montants, configuration
-src/server/modules logique métier par module (règles d'accès, services)
-tests/unit         tests sans base de données
-tests/db           tests des contraintes PostgreSQL
-```
-
-## Confidentialité
-
-Un simple membre ne voit que les totaux du budget et des contributions. Une contribution
-peut être anonyme : seuls le contributeur et le trésorier qui la confirme voient le nom.
-Ce filtrage est fait côté serveur. Détails : [`docs/adr/0002-confidentialite-contributions.md`](docs/adr/0002-confidentialite-contributions.md).
+1. Créer un projet sur console.firebase.google.com (région Europe), activer
+   Authentication > Email/Mot de passe, et Firestore.
+2. Copier la configuration web dans `public/js/config.js`.
+3. `npx firebase login` puis `npx firebase deploy --only firestore,hosting --project <id-du-projet>`.

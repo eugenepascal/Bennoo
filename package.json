@@ -5,36 +5,18 @@
   "description": "Bennoo — Une cérémonie, toute la famille, un seul endroit.",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "npm run test:unit && npm run test:db",
-    "test:unit": "node --test \"tests/unit/**/*.test.ts\"",
-    "test:db": "node --test \"tests/db/**/*.test.ts\"",
-    "db:migrate": "prisma migrate deploy",
-    "db:check": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
-    "db:generate": "prisma generate",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
-  },
-  "dependencies": {
-    "next": "16.3.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-bennoo \"node --test 'tests/rules/**/*.test.js'\"",
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-bennoo \"playwright test\"",
+    "serve": "firebase emulators:start --only auth,firestore,hosting --project demo-bennoo"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "eslint": "^9.0.0",
-    "eslint-config-next": "16.3.3",
-    "prisma": "^7.0.0",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.9.0"
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@playwright/test": "^1.55.0",
+    "firebase": "^12.18.0",
+    "firebase-tools": "^15.20.0"
   }
 }

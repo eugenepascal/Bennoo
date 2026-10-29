@@ -1,12 +1,6 @@
 node_modules/
-.next/
-out/
-coverage/
-playwright-report/
 test-results/
-src/generated/
-.env
-.env.*
-!.env.example
-*.log
+playwright-report/
+*-debug.log
+.firebase/
 .DS_Store
