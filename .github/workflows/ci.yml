@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bennoo
+          POSTGRES_PASSWORD: bennoo
+          POSTGRES_DB: bennoo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bennoo -d bennoo"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://bennoo:bennoo@localhost:5432/bennoo
+      PGHOST: localhost
+      PGUSER: bennoo
+      PGPASSWORD: bennoo
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Client PostgreSQL (psql) pour les tests de base
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      # Tant que package-lock.json n'est pas versionné, on l'installe puis on le publie
+      # en artefact pour le committer ; ensuite cette étape passera à `npm ci`.
+      - name: Installation des dépendances
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: Versions installées
+        run: npm ls --depth=0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests unitaires
+        run: npm run test:unit
+      - name: Migrations (base vide)
+        run: npm run db:migrate
+      - name: Schéma Prisma identique aux migrations
+        run: npm run db:check
+      - name: Tests de la base
+        run: npm run test:db
+      - name: Build
+        run: npm run build
