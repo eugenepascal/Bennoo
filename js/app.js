@@ -47,38 +47,40 @@ const updateProfile = (user, p) => user.updateProfile(p);
 
 /* Connexion avec Google : fenêtre surgissante ; si le navigateur la bloque (fréquent sur
    téléphone), on bascule sur une redirection vers Google puis retour sur Bennoo. */
-// Mémoire de session : "local" (IndexedDB, par défaut, comme Yond) ou "session" (sessionStorage)
-// si le navigateur a refusé IndexedDB lors d'une tentative précédente.
+// Mémoire de session : "local" (IndexedDB, par défaut) ou "session" (sessionStorage) si le
+// navigateur a refusé IndexedDB lors d'une tentative précédente. Réglée une seule fois au
+// démarrage : la fenêtre Google doit s'ouvrir immédiatement au clic, sinon le navigateur la bloque.
 const GOOGLE_PERSIST_KEY = "bennoo:auth-persistence";
 function isStorageError(err) {
   return /closing|hidden|indexed ?db|database/i.test(String(err && err.message));
+}
+function applyPersistence() {
+  if (!FIREBASE_READY) return;
+  let mode = "local";
+  try { mode = localStorage.getItem(GOOGLE_PERSIST_KEY) || "local"; } catch (_) { mode = "session"; }
+  auth.setPersistence(mode === "session" ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL)
+    .catch(() => { /* navigation privée / ancien navigateur : valeur par défaut */ });
 }
 async function signInWithGoogle() {
   requireFirebase();
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  let mode = "local";
-  try { mode = localStorage.getItem(GOOGLE_PERSIST_KEY) || "local"; } catch (_) { mode = "session"; }
   try {
-    await auth.setPersistence(mode === "session" ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL);
-  } catch (_) { /* navigation privée / ancien navigateur : on garde la valeur par défaut */ }
-  try {
+    // Pas de redirection : sur github.io, la redirection Google revient sans session
+    // (le navigateur isole le stockage de bennoo-4186e.firebaseapp.com).
     await auth.signInWithPopup(provider);
   } catch (err) {
     if (isStorageError(err)) {
-      // La connexion a parfois réussi malgré l'erreur : on laisse à Firebase le temps de le signaler.
       for (let i = 0; i < 20 && !auth.currentUser; i++) await new Promise((r) => setTimeout(r, 150));
       if (auth.currentUser) return;
-      // Sinon on bascule sur sessionStorage (sans IndexedDB) pour la prochaine tentative.
       try { localStorage.setItem(GOOGLE_PERSIST_KEY, "session"); } catch (_) {}
       try { await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); } catch (_) {}
       throw Object.assign(new Error("Le navigateur a bloqué la mémoire locale pendant la connexion Google. Cliquez de nouveau sur « Continuer avec Google » : Bennoo utilise maintenant une autre mémoire."), { code: undefined });
     }
-    if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(err.code)) {
-      await auth.signInWithRedirect(provider);
-      return;
+    if (err.code === "auth/popup-blocked") {
+      throw Object.assign(new Error("La fenêtre Google a été bloquée. Autorisez les fenêtres pop-up pour ce site, puis réessayez."), { code: undefined });
     }
-    if (err.code === "auth/popup-closed-by-user") return;
+    if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
     throw err;
   }
 }
@@ -1394,6 +1396,7 @@ window.addEventListener("hashchange", route);
 window.addEventListener("bennoo:refresh", () => { currentUser = auth.currentUser; route(); });
 
 if (FIREBASE_READY) {
+  applyPersistence();
   auth.getRedirectResult().catch((err) => { if (err.code !== "auth/no-auth-event") toast(errMsg(err)); });
   auth.onAuthStateChanged(async (u) => {
     if (u && u.emailVerified) await ensureProfile(u); // comptes Google : email déjà vérifié par Google
