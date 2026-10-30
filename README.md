@@ -50,9 +50,9 @@ Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche
 | --- | --- | --- |
 | Lancement | Découvrir Bennoo, commencer ou se connecter | Planche 1 — écran 1 |
 | Présentation (3 écrans) | Comprendre l'application ; « Suivant » ou « Passer » | Planche 1 — écran 2 |
-| Inscription | Prénom, nom, email, mot de passe (8 caractères min.), acceptation des conditions | Planche 1 — écran 3 |
+| Inscription | Prénom, nom, email, mot de passe (8 caractères min.), acceptation des conditions, ou **Continuer avec Google** | Planche 1 — écran 3 |
 | Vérification de l'email | Lien reçu par email, bouton « J'ai cliqué sur le lien », renvoi de l'email | — |
-| Connexion | Email et mot de passe, afficher / masquer le mot de passe | Écrans principaux — 2 |
+| Connexion | Email et mot de passe, afficher / masquer le mot de passe, ou **Continuer avec Google** | Écrans principaux — 2 |
 | Mot de passe oublié | Réception d'un lien de réinitialisation (réponse identique que le compte existe ou non) | — |
 | Accueil personnel | « Bonjour Awa 👋 », événements à venir et passés, bouton « + Créer » ; création de la première famille | Planche 1 — écran 4 |
 | Family Hub | Nom de la famille, nombre de membres et d'événements, onglets Membres / Événements | Planche 2 — écran 1 |
@@ -235,7 +235,8 @@ Les étapes suivantes (tâches, budget, contributions, invités, photos) ajouter
 
 1. **Créer le projet** « bennoo » sur [console.firebase.google.com](https://console.firebase.google.com),
    séparé des projets Lumen et Yond.
-2. **Authentication → Méthode de connexion** : activer « Adresse e-mail / Mot de passe ».
+2. **Authentication → Méthode de connexion** : activer « Adresse e-mail / Mot de passe » et **« Google »**
+   (choisir l'adresse email d'assistance du projet).
    Dans les paramètres : mot de passe de 8 caractères minimum, protection contre l'énumération
    des emails activée.
 3. **Firestore Database → Créer** : édition **Standard**, mode **production**, région en **Europe**
@@ -273,7 +274,7 @@ Les étapes suivantes (tâches, budget, contributions, invités, photos) ajouter
 | 6 | Album photos de l'événement (forfait Firebase Blaze) | Prévue |
 | — | Avant l'ouverture au public : tests avec 5 familles, avis juridique (CDP Sénégal, RGPD) | Prévue |
 
-**Après la V1** : connexion par téléphone, Google et Apple · paiements en ligne (Wave, Orange Money,
+**Après la V1** : connexion par téléphone et Apple · paiements en ligne (Wave, Orange Money,
 carte, via un prestataire agréé) · notifications automatiques (push, email, WhatsApp) · Diaspora Mode
 (voyage, hébergement, accueil des proches) · plan de table · documents partagés · Family Passport et
 arbre familial · Bennoo Copilot (assistant IA) · Yond Live (jour J, programme, carte, gamification) ·
@@ -292,6 +293,7 @@ version en wolof · Bennoo Pro (prestataires et devis).
 | 29/10/2026 | **Firebase** plutôt que Supabase pour la V1 | Pas de serveur à gérer, gratuit au départ, déjà utilisé pour Lumen et Yond |
 | 30/10/2026 | Application **statique** (index.html + css + js), comme Lumen et Yond | Simple à lire, à modifier et à mettre en ligne |
 | 30/10/2026 | Firestore **édition Standard**, région Europe | Gratuit au départ ; règles et index prévus pour cette édition |
+| 30/10/2026 | Ajout de la **connexion avec Google** | Demandée par le porteur du projet ; gratuite, email déjà vérifié par Google |
 
 ---
 

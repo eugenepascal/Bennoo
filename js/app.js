@@ -45,6 +45,44 @@ const sendEmailVerification = (user) => user.sendEmailVerification();
 const sendPasswordResetEmail = (_a, email) => { requireFirebase(); return auth.sendPasswordResetEmail(email); };
 const updateProfile = (user, p) => user.updateProfile(p);
 
+/* Connexion avec Google : fenêtre surgissante ; si le navigateur la bloque (fréquent sur
+   téléphone), on bascule sur une redirection vers Google puis retour sur Bennoo. */
+async function signInWithGoogle() {
+  requireFirebase();
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  try {
+    await auth.signInWithPopup(provider);
+  } catch (err) {
+    if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(err.code)) {
+      await auth.signInWithRedirect(provider);
+      return;
+    }
+    if (err.code === "auth/popup-closed-by-user") return;
+    throw err;
+  }
+}
+
+/* Premier passage d'un compte Google : on crée son profil Bennoo à partir de son nom Google. */
+async function ensureProfile(user) {
+  try {
+    const existing = await data.getProfile();
+    if (existing) return;
+    const fallback = (user.email || "Membre").split("@")[0];
+    await data.saveProfile({ displayName: cleanName(user.displayName || fallback).slice(0, 80), phone: null });
+  } catch (e) { console.warn("Profil non créé :", e); }
+}
+
+function googleButton(form) {
+  const btn = h("button", { type: "button", class: "btn btn-block btn-google" },
+    h("img", { src: "images/google.svg", alt: "", width: 20, height: 20 }), "Continuer avec Google");
+  btn.addEventListener("click", () => withBusy(btn, async () => {
+    showFormError(form, null);
+    try { await signInWithGoogle(); } catch (err) { showFormError(form, errMsg(err)); }
+  }));
+  return h("div", { class: "form" }, h("p", { class: "or" }, "Ou continuer avec"), btn);
+}
+
 /* ---------- Données (Firestore) ----------
    Structure :
      users/{uid}                                     profil privé
@@ -310,6 +348,10 @@ function authErrorMessage(code) {
     "auth/user-not-found": "Email ou mot de passe incorrect.",
     "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes puis réessayez.",
     "auth/network-request-failed": "Pas de connexion internet. Vérifiez votre réseau.",
+    "auth/operation-not-allowed": "Ce mode de connexion n'est pas encore activé dans Firebase.",
+    "auth/unauthorized-domain": "Ce site n'est pas encore autorisé dans Firebase (domaines autorisés).",
+    "auth/account-exists-with-different-credential": "Un compte existe déjà avec cet email : connectez-vous avec votre mot de passe.",
+    "auth/popup-closed-by-user": "Connexion Google annulée.",
     "permission-denied": "Action non autorisée.",
     "unavailable": "Service momentanément indisponible. Réessayez.",
   };
@@ -587,6 +629,7 @@ function signupScreen() {
   const node = bare(
     header("Créer un compte", "#/"),
     form,
+    googleButton(form),
     h("p", { class: "or" }, "Déjà un compte ? ", h("a", { href: "#/connexion" }, "Se connecter")),
   );
   return { node, title: "Créer un compte" };
@@ -620,6 +663,7 @@ function loginScreen() {
       h("p", { class: "muted" }, "Connectez-vous pour retrouver votre famille."),
     ),
     form,
+    googleButton(form),
     h("p", { class: "or" }, "Pas encore de compte ? ", h("a", { href: "#/inscription" }, "S'inscrire")),
   );
   return { node, title: "Connexion" };
@@ -1330,7 +1374,11 @@ window.addEventListener("hashchange", route);
 window.addEventListener("bennoo:refresh", () => { currentUser = auth.currentUser; route(); });
 
 if (FIREBASE_READY) {
-  auth.onAuthStateChanged((u) => { currentUser = u; ready = true; route(); });
+  auth.getRedirectResult().catch((err) => { if (err.code !== "auth/no-auth-event") toast(errMsg(err)); });
+  auth.onAuthStateChanged(async (u) => {
+    if (u && u.emailVerified) await ensureProfile(u); // comptes Google : email déjà vérifié par Google
+    currentUser = u; ready = true; route();
+  });
 } else {
   ready = true;
   route();

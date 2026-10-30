@@ -231,3 +231,6 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .participant .controls { display: flex; gap: 8px; width: 100%; padding-left: 56px; }
 .participant .controls select { flex: 1; }
 .kpi .v.sm { font-size: 1.15rem; }
+
+.btn-google { border-color: var(--line); color: var(--ink); background: #fff; }
+.btn-google img { width: 20px; height: 20px; }
