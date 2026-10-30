@@ -1,0 +1,179 @@
+rules_version = '2';
+
+// Bennoo — règles d'accès Firestore (étape 1 : comptes, familles, événements).
+//
+// Ces règles SONT la sécurité de l'application : le site est public, seul Firestore
+// décide qui lit et écrit quoi. Chaque règle est couverte par tests/rules/.
+//
+// Structure :
+//   users/{uid}                                       profil privé
+//   families/{fid}                                    famille
+//   families/{fid}/members/{uid}                      appartenance (owner | admin | member)
+//   families/{fid}/invites/{token}                    lien d'invitation (7 jours)
+//   families/{fid}/events/{eid}                       événement
+//   families/{fid}/events/{eid}/participants/{uid}    rôle dans l'événement (organizer | treasurer | member)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Outils ──────────────────────────────────────────────────────────────
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    // Écrire dans une famille exige un email vérifié : un lien d'invitation transféré
+    // ne suffit pas à agir sous une fausse adresse.
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function data() { return request.resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function optText(v, max) { return v == null || text(v, 0, max); }
+
+    function familyPath(fid) { return /databases/$(database)/documents/families/$(fid); }
+    function memberPath(fid, uid) { return /databases/$(database)/documents/families/$(fid)/members/$(uid); }
+    function isFamilyMember(fid) { return exists(memberPath(fid, me())); }
+    function familyRole(fid) { return get(memberPath(fid, me())).data.role; }
+    function isFamilyAdmin(fid) { return isFamilyMember(fid) && familyRole(fid) in ['owner', 'admin']; }
+
+    function eventPath(fid, eid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid); }
+    function participantPath(fid, eid, uid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/participants/$(uid); }
+    function isParticipant(fid, eid) { return exists(participantPath(fid, eid, me())); }
+    function eventRole(fid, eid) { return get(participantPath(fid, eid, me())).data.role; }
+    function isOrganizer(fid, eid) { return isParticipant(fid, eid) && eventRole(fid, eid) == 'organizer'; }
+
+    // ─── Profil : visible et modifiable par son seul propriétaire ────────────
+    match /users/{userId} {
+      function validProfile() {
+        return data().keys().hasOnly(['displayName', 'phone', 'locale', 'createdAt', 'updatedAt'])
+          && text(data().displayName, 1, 80)
+          && (data().phone == null || (data().phone is string && data().phone.matches('^\\+[1-9][0-9]{6,14}$')))
+          && data().locale in ['fr']
+          && data().updatedAt == request.time;
+      }
+      allow get: if signedIn() && me() == userId;
+      allow create: if signedIn() && me() == userId && validProfile() && data().createdAt == request.time;
+      allow update: if signedIn() && me() == userId && validProfile() && data().createdAt == resource.data.createdAt;
+      allow list, delete: if false;
+    }
+
+    // ─── Familles ────────────────────────────────────────────────────────────
+    match /families/{fid} {
+      function validFamily() {
+        return data().keys().hasOnly(['name', 'createdBy', 'createdAt']) && text(data().name, 1, 80);
+      }
+      allow get: if verified() && isFamilyMember(fid);
+      // Créée dans le même lot d'écriture que l'appartenance « owner » de son créateur.
+      allow create: if verified() && validFamily()
+        && data().createdBy == me() && data().createdAt == request.time
+        && getAfter(memberPath(fid, me())).data.role == 'owner';
+      allow update: if verified() && isFamilyAdmin(fid) && validFamily() && changed().hasOnly(['name']);
+      allow list, delete: if false;
+
+      // Appartenances
+      match /members/{memberId} {
+        function validMember() {
+          return data().keys().hasOnly(['uid', 'role', 'displayName', 'joinedAt', 'inviteToken'])
+            && data().uid == memberId && text(data().displayName, 1, 80);
+        }
+        function validInvite(token) {
+          return token is string
+            && exists(/databases/$(database)/documents/families/$(fid)/invites/$(token))
+            && get(/databases/$(database)/documents/families/$(fid)/invites/$(token)).data.expiresAt > request.time;
+        }
+        allow read: if verified() && isFamilyMember(fid);
+        allow create: if verified() && memberId == me() && validMember() && data().joinedAt == request.time && (
+          // fondateur : la famille naît dans le même lot
+          (data().role == 'owner' && !exists(familyPath(fid)) && getAfter(familyPath(fid)).data.createdBy == me()
+            && !('inviteToken' in data()))
+          // invité : un lien valide, jamais un rôle supérieur à « member »
+          || (data().role == 'member' && validInvite(data().inviteToken))
+        );
+        // Un admin change le rôle des autres (admin <-> member) ; le propriétaire ne change jamais.
+        allow update: if verified() && (
+          (isFamilyAdmin(fid) && memberId != me() && resource.data.role != 'owner'
+            && changed().hasOnly(['role']) && data().role in ['admin', 'member'])
+          || (memberId == me() && changed().hasOnly(['displayName']) && text(data().displayName, 1, 80))
+        );
+        // On peut quitter une famille, ou en être retiré par un admin ; jamais le propriétaire.
+        allow delete: if verified() && resource.data.role != 'owner'
+          && (memberId == me() || isFamilyAdmin(fid));
+      }
+
+      // Liens d'invitation : l'identifiant du document EST le jeton secret (32 octets aléatoires).
+      // Lecture unitaire possible avec le jeton ; la liste est réservée aux admins.
+      match /invites/{token} {
+        allow get: if verified();
+        allow list: if verified() && isFamilyAdmin(fid);
+        allow create: if verified() && isFamilyAdmin(fid) && token.size() == 43
+          && data().keys().hasOnly(['familyName', 'createdBy', 'createdAt', 'expiresAt'])
+          && text(data().familyName, 1, 80)
+          && data().createdBy == me() && data().createdAt == request.time
+          // 7 jours demandés par l'application ; 1 jour de tolérance pour l'horloge du téléphone.
+          && data().expiresAt is timestamp && data().expiresAt > request.time
+          && data().expiresAt <= request.time + duration.value(8, 'd');
+        allow delete: if verified() && isFamilyAdmin(fid);
+        allow update: if false;
+      }
+
+      // ─── Événements : visibles par leurs seuls participants ────────────────
+      match /events/{eid} {
+        function validEvent() {
+          return data().keys().hasOnly(['type', 'title', 'description', 'startsAt', 'venue', 'city',
+              'currency', 'budgetPlanned', 'expectedGuests', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+            && data().type in ['WEDDING', 'NAMING_CEREMONY', 'COMMUNION', 'BIRTHDAY', 'RELIGIOUS_CEREMONY',
+                               'FAMILY_REUNION', 'TRADITIONAL_CEREMONY', 'CUSTOM']
+            && text(data().title, 1, 120)
+            && optText(data().description, 2000)
+            && (data().startsAt == null || data().startsAt is timestamp)
+            && optText(data().venue, 200) && optText(data().city, 120)
+            && data().currency in ['XOF', 'EUR']
+            && data().budgetPlanned is int && data().budgetPlanned >= 0 && data().budgetPlanned <= 100000000000
+            && (data().expectedGuests == null || (data().expectedGuests is int
+                && data().expectedGuests >= 0 && data().expectedGuests <= 100000))
+            && data().status in ['active', 'archived']
+            && data().updatedAt == request.time;
+        }
+        allow get: if verified() && isParticipant(fid, eid);
+        allow list: if false; // on passe par « mes événements » (participants)
+        // Tout membre de la famille peut créer un événement ; il en devient organisateur dans le même lot.
+        allow create: if verified() && isFamilyMember(fid) && validEvent()
+          && data().createdBy == me() && data().createdAt == request.time && data().status == 'active'
+          && getAfter(participantPath(fid, eid, me())).data.role == 'organizer';
+        allow update: if verified() && isOrganizer(fid, eid) && validEvent()
+          && data().createdBy == resource.data.createdBy && data().createdAt == resource.data.createdAt;
+        allow delete: if false;
+
+        match /participants/{pid} {
+          function validParticipant() {
+            return data().keys().hasOnly(['uid', 'role', 'displayName', 'addedAt'])
+              && data().uid == pid && text(data().displayName, 1, 80)
+              && data().role in ['organizer', 'treasurer', 'member'];
+          }
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && validParticipant() && data().addedAt == request.time && (
+            // le créateur de l'événement, dans le même lot que l'événement
+            (pid == me() && data().role == 'organizer' && !exists(eventPath(fid, eid))
+              && getAfter(eventPath(fid, eid)).data.createdBy == me())
+            // un organisateur ajoute un membre de la famille
+            || (isOrganizer(fid, eid) && exists(memberPath(fid, pid))
+                && data().displayName == get(memberPath(fid, pid)).data.displayName)
+          );
+          // Un organisateur change le rôle des AUTRES : il reste donc toujours au moins un organisateur.
+          allow update: if verified() && isOrganizer(fid, eid) && pid != me()
+            && validParticipant() && changed().hasOnly(['role']);
+          allow delete: if verified() && (
+            (isOrganizer(fid, eid) && pid != me())
+            || (pid == me() && resource.data.role != 'organizer')
+          );
+        }
+      }
+    }
+
+    // ─── Requêtes « mes familles » / « mes événements » ──────────────────────
+    // Chacun ne lit, à travers toutes les familles, que ses propres lignes d'appartenance.
+    match /{path=**}/members/{memberId} {
+      allow list: if verified() && resource.data.uid == me();
+    }
+    match /{path=**}/participants/{pid} {
+      allow list: if verified() && resource.data.uid == me();
+    }
+  }
+}
