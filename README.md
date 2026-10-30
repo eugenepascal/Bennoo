@@ -34,13 +34,11 @@ Canada, États-Unis…) qui organisent elles-mêmes, sans organisateur professio
 | --- | --- |
 | Écrans de l'étape 1 (voir ci-dessous) | **Codés**, d'après les maquettes |
 | Règles de sécurité Firestore de l'étape 1 | **Écrites**, testées sur l'émulateur Firebase (18 tests réussis) |
-| Liaison avec le projet Firebase | **À faire** : configuration à copier en haut de `js/app.js` |
+| Liaison avec le projet Firebase | **Faite** : projet `bennoo-4186e`, configuration en haut de `js/app.js` (sans Google Analytics) |
 | Essai complet avec un vrai projet Firebase | **À faire** dès que la configuration est en place |
 | Étapes 2 à 6 (tâches, budget, invités, tableau de bord complet, photos) | **Prévues** |
 
-Tant que Firebase n'est pas relié, les écrans publics s'affichent (lancement, présentation,
-inscription, connexion) mais l'inscription et la connexion affichent un message indiquant
-qu'elles ne sont pas encore activées. Aucune donnée d'exemple n'est présentée comme réelle.
+Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche vient du projet Firebase.
 
 ---
 
@@ -267,7 +265,7 @@ Les étapes suivantes (tâches, budget, contributions, invités, photos) ajouter
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1 | Comptes, familles, invitations, création d'événement, tableau de bord simple | Codée — à essayer avec Firebase |
+| 1 | Comptes, familles, invitations, création d'événement, tableau de bord simple | Codée, reliée à Firebase — à essayer |
 | 2 | Tâches : responsable, échéance, statut, checklist selon la cérémonie, calendrier | Prévue |
 | 3 | Budget, dépenses, contributions (promise → déclarée → confirmée), anonymat, totaux | Prévue |
 | 4 | Invités par foyer, lien personnel WhatsApp / QR code, réponse (RSVP) sans compte | Prévue |

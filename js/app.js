@@ -7,17 +7,19 @@
 "use strict";
 
 /* ---------- Firebase ----------
-   À compléter avec la configuration web du projet Firebase « Bennoo »
+   Projet Firebase « bennoo-4186e »
    (console Firebase > Paramètres du projet > Vos applications > Web).
    Ces valeurs ne sont pas secrètes : la sécurité repose sur les règles Firestore. */
 const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyAD0c71YrcmQiw26i7c3k97iC6ewSQ1gdo",
+  authDomain: "bennoo-4186e.firebaseapp.com",
+  projectId: "bennoo-4186e",
+  storageBucket: "bennoo-4186e.firebasestorage.app",
+  messagingSenderId: "746683819473",
+  appId: "1:746683819473:web:ca389548bc75d44d68ecf0",
+  measurementId: "G-HGJN04YFNE",
 };
+// Google Analytics n'est pas chargé : aucune mesure d'audience sans consentement.
 
 let auth = null, db = null, FIREBASE_READY = false;
 try {
