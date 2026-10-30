@@ -32,11 +32,11 @@ Canada, États-Unis…) qui organisent elles-mêmes, sans organisateur professio
 
 | Élément | État |
 | --- | --- |
-| Écrans de l'étape 1 (voir ci-dessous) | **Codés**, d'après les maquettes |
-| Règles de sécurité Firestore de l'étape 1 | **Écrites**, testées sur l'émulateur Firebase (18 tests réussis) |
+| Étape 1 : comptes (email et Google), familles, invitations, événements | **Codée et essayée** sur le projet Firebase réel (connexion Google, accueil) |
+| Étapes 2 à 4 : tâches et calendrier, budget, dépenses, contributions, invités et réponses | **Codées** d'après les maquettes (30/10/2026) ; **à essayer** avec le [scénario de test](docs/scenario-de-test.md) |
+| Règles de sécurité Firestore | Étape 1 testée sur l'émulateur (18 tests) ; étapes 2 à 4 **écrites, non testées sur émulateur** (indisponible dans l'environnement de développement) : à vérifier avec le scénario de test |
 | Liaison avec le projet Firebase | **Faite** : projet `bennoo-4186e`, configuration en haut de `js/app.js` (sans Google Analytics) |
-| Essai complet avec un vrai projet Firebase | **À faire** dès que la configuration est en place |
-| Étapes 2 à 6 (tâches, budget, invités, tableau de bord complet, photos) | **Prévues** |
+| Étapes 5 et 6 (installation sur téléphone, pages légales, album photos) | **Prévues** |
 
 Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche vient du projet Firebase.
 
@@ -60,9 +60,18 @@ Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche
 | Rejoindre une famille | Ouvrir le lien reçu, créer son compte ou se connecter, rejoindre | — |
 | Détail d'un membre | Rôle, date d'arrivée ; un administrateur change le rôle ou retire le membre ; quitter la famille | Planche 2 — écran 2 |
 | Créer un événement (5 étapes) | 1. Type · 2. Nom et description · 3. Date, lieu, ville · 4. Devise, budget prévu, invités prévus · 5. Participants choisis parmi la famille | Écrans principaux — 6 |
-| Tableau de bord de l'événement | Compte à rebours (J - n), budget prévu, invités prévus, nombre de participants, informations | Écrans principaux — 7 |
+| Tableau de bord de l'événement | J - n, avancement de l'organisation (tâches terminées), invités confirmés, tâches restantes, budget global, contributions confirmées, prochaines tâches | Écrans principaux — 7 |
+| Tâches (liste) | Filtres Toutes / À faire / En cours / Terminées avec compteurs, case à cocher, échéance, responsable ; checklist proposée selon la cérémonie | Écrans principaux — 8 |
+| Calendrier | Mois par mois, jours avec tâches marqués, jour de l'événement en doré, tâches du jour choisi | Écrans principaux — 9 |
+| Détail / création d'une tâche | Statut (À faire, En cours, Terminée), échéance, responsable, description ; modification et suppression par l'organisateur | Planche 4 — « Détail d'une tâche » |
+| Budget | Budget global, part financée, contributions confirmées et en attente, dépenses engagées et payées, reste à financer ; répartition par catégorie | Écrans principaux — 10, planche 4 |
+| Dépenses | Filtres Toutes / Payées / À payer ; ajout, modification, suppression (montant, catégorie, fournisseur, date, statut) | Planche 3 — 3 |
+| Contributions | Filtres Promises / Déclarées / Confirmées ; déclaration par chacun, anonyme ou non ; confirmation par le trésorier ; don reçu d'un proche sans compte | Planche 3 — 4 |
+| Invités | Foyers, nombre de places, téléphone ; lien personnel par WhatsApp ou copie ; réponses et compteurs | Écrans principaux — 11 |
+| Carton d'invitation | Qui invite, message ; aperçu violet et doré tel que l'invité le voit | Écrans principaux — 11 « Aperçu » |
+| Réponse d'un invité (RSVP) | Page ouverte depuis le lien personnel, **sans compte** : oui / non, nombre de personnes, petit mot | — |
 | Participants | Liste avec rôles ; l'organisateur ajoute, change le rôle ou retire | — |
-| Modifier l'événement | Réservé à l'organisateur | — |
+| Modifier l'événement | Réservé à l'organisateur ; le carton d'invitation publié suit automatiquement | — |
 | Paramètres | Profil, familles, confidentialité, langue, déconnexion | Écrans principaux — 13 |
 | Mon profil | Nom affiché, téléphone au format international | — |
 | Conditions et confidentialité | Ce que voient les autres, où sont les données | — |
@@ -97,9 +106,9 @@ en nombres entiers, sans arrondi. Exemple : « 4 200 000 » FCFA ; « 12,50 » �
 
 | Rôle | Droits |
 | --- | --- |
-| Organisateur | Modifie l'événement, ajoute des participants, change leur rôle, les retire |
-| Trésorier | Participe ; gérera le budget et confirmera les contributions (étape 3) |
-| Membre | Participe à l'organisation |
+| Organisateur | Modifie l'événement, gère les participants, crée et attribue les tâches, gère les dépenses, gère les invités et le carton ; voit les contributions **sans** le nom des anonymes |
+| Trésorier | Gère les dépenses, **confirme les contributions**, enregistre les dons reçus, voit le nom des contributeurs anonymes |
+| Membre | Voit les tâches, change le statut de celles dont il est responsable, voit les **totaux** du budget, déclare ses propres contributions |
 
 Il reste **toujours au moins un organisateur** : un organisateur ne peut changer que le rôle des autres.
 
@@ -107,9 +116,12 @@ Il reste **toujours au moins un organisateur** : un organisateur ne peut changer
 
 - **Un événement n'est visible que de ses participants**, même à l'intérieur de la famille.
 - **Le profil** (dont le téléphone) n'est visible que par son propriétaire.
-- **Un simple membre ne verra que les totaux** du budget et des contributions (étape 3).
-- **Une contribution pourra être anonyme** : nom visible du seul contributeur et du trésorier (étape 3).
-- **La page d'un invité** n'affichera que l'événement et son propre nom (étape 4).
+- **Un simple membre ne voit que les totaux** du budget et des contributions, plus ses propres contributions.
+- **Une contribution peut être anonyme** : nom visible du seul contributeur et du trésorier ; l'organisateur
+  voit « Contributeur anonyme ».
+- **La page d'un invité** n'affiche que le carton et son propre foyer ; la liste des invités est réservée
+  aux organisateurs.
+- **Pas de paiement dans l'application** : on donne comme d'habitude, on déclare, le trésorier confirme.
 - Ces protections sont appliquées par **Firebase lui-même** (règles Firestore) : masquer un bouton
   dans l'écran n'est jamais considéré comme une protection suffisante.
 
@@ -160,7 +172,19 @@ families/{famille}/invites/{jeton}                lien d'invitation : nom de la 
 families/{famille}/events/{événement}             type, titre, description, date, lieu, ville,
                                                   devise, budget prévu, invités prévus, statut
 families/{famille}/events/{événement}/participants/{uid}   rôle (organizer, treasurer, member), nom
+  …/participants/{uid}/myContributions/{id}       index personnel « mes contributions »
+  …/tasks/{id}                                    titre, description, échéance, statut, responsable
+  …/expenses/{id}                                 libellé, catégorie, montant, fournisseur, date, statut
+  …/contributions/{id}                            montant, statut, anonyme, nom (vide si anonyme), origine, précision
+  …/contributions/{id}/private/identity           qui a contribué (contributeur et trésorier seulement)
+  …/summary/budget, …/summary/guests              totaux partagés avec tous les participants
+  …/guests/{jeton}                                foyer, téléphone, places, réponse, nombre présent, mot
+  …/public/invitation                             carton : titre, type, date, lieu, qui invite, message
 ```
+
+Les totaux partagés (`summary`) sont recalculés par l'organisateur ou le trésorier chaque fois qu'il
+ouvre l'aperçu, le budget ou les invités : un simple membre voit donc les chiffres de la dernière visite
+d'un responsable (la date de mise à jour est affichée).
 
 ---
 
@@ -227,7 +251,32 @@ c'est Firebase qui décide, à chaque lecture et chaque écriture, si elle est a
 Comptes, mots de passe, sessions, emails de vérification et de réinitialisation : gérés et protégés
 par **Firebase Authentication**, sans règle à écrire.
 
-Les étapes suivantes (tâches, budget, contributions, invités, photos) ajouteront leurs propres règles.
+**Tâches (`tasks`)**
+- Visibles par tous les participants de l'événement.
+- Créées, modifiées et supprimées par un organisateur ; le responsable doit être un participant.
+- Le responsable d'une tâche peut **seulement** changer son statut.
+
+**Dépenses (`expenses`)**
+- Lues et gérées **uniquement par l'organisateur et le trésorier**. Montant entier strictement positif,
+  catégorie et statut dans les listes prévues.
+
+**Contributions (`contributions`)**
+- Lues par l'organisateur et le trésorier ; chacun lit **les siennes**.
+- Un participant déclare pour lui-même (« promise » ou « déclarée », jamais « confirmée »), sous son
+  propre nom ou anonymement ; il peut la modifier ou la retirer tant qu'elle n'est pas confirmée.
+- **Seul le trésorier confirme**, corrige ou supprime, et peut enregistrer le don d'un proche sans compte.
+- L'identité d'un contributeur anonyme est dans un document séparé (`private/identity`) que seuls
+  le contributeur et le trésorier peuvent lire.
+
+**Totaux (`summary`)**
+- Lus par tous les participants ; écrits par l'organisateur ou le trésorier (budget) et l'organisateur
+  (invités), uniquement avec des nombres entiers positifs.
+
+**Invités (`guests`) et carton (`public/invitation`)**
+- La liste des invités est réservée aux organisateurs.
+- Chaque foyer a un jeton secret de 43 caractères : avec son lien, on lit **son** invitation et on y
+  répond (oui avec 1 à « places » personnes, ou non), sans compte, sans pouvoir changer autre chose.
+- Le carton est lisible avec le lien ; seul un organisateur le publie.
 
 ---
 
@@ -266,10 +315,10 @@ Les étapes suivantes (tâches, budget, contributions, invités, photos) ajouter
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1 | Comptes, familles, invitations, création d'événement, tableau de bord simple | Codée, reliée à Firebase — à essayer |
-| 2 | Tâches : responsable, échéance, statut, checklist selon la cérémonie, calendrier | Prévue |
-| 3 | Budget, dépenses, contributions (promise → déclarée → confirmée), anonymat, totaux | Prévue |
-| 4 | Invités par foyer, lien personnel WhatsApp / QR code, réponse (RSVP) sans compte | Prévue |
+| 1 | Comptes, familles, invitations, création d'événement, tableau de bord simple | Codée et essayée |
+| 2 | Tâches : responsable, échéance, statut, checklist selon la cérémonie, calendrier | Codée — à essayer |
+| 3 | Budget, dépenses, contributions (promise → déclarée → confirmée), anonymat, totaux | Codée — à essayer |
+| 4 | Invités par foyer, lien personnel WhatsApp, réponse (RSVP) sans compte ; QR code plus tard | Codée — à essayer |
 | 5 | Tableau de bord complet, installation sur téléphone, pages légales, mise en ligne | Prévue |
 | 6 | Album photos de l'événement (forfait Firebase Blaze) | Prévue |
 | — | Avant l'ouverture au public : tests avec 5 familles, avis juridique (CDP Sénégal, RGPD) | Prévue |
@@ -299,8 +348,12 @@ version en wolof · Bennoo Pro (prestataires et devis).
 
 ## 11. Limites connues
 
-- **Sans Cloud Functions** (offre gratuite), les totaux visibles des simples membres seront tenus à jour
-  par le trésorier au moment des confirmations (étape 3).
+- **Sans Cloud Functions** (offre gratuite), les totaux visibles des simples membres sont recalculés quand
+  l'organisateur ou le trésorier ouvre l'aperçu, le budget ou les invités : ils peuvent avoir un peu de
+  retard (la date de mise à jour est affichée).
+- **Trésorier obligatoire pour confirmer** : l'organisateur ne confirme pas les contributions (décision
+  sur l'anonymat). Il faut désigner un trésorier dans l'onglet Participants.
+- **Justificatifs de dépenses, QR code des invitations, rappels automatiques** : prévus plus tard.
 - **Photos** : le stockage de fichiers Firebase exige le forfait Blaze (carte bancaire) depuis février 2026.
 - **Illustrations** : les maquettes utilisent des photos de familles ; l'application utilise pour
   l'instant des dégradés, le logo et des emojis. Des photos haute définition libres de droits peuvent

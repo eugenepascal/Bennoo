@@ -11,7 +11,7 @@ La colonne **V1** indique ce qui sera développé dans la première version (sit
 
 | Fichier | Écrans | V1 |
 | --- | --- | --- |
-| [1-5-accueil-inscription-role-accueil-family-hub.png](01-ecrans-principaux/1-5-accueil-inscription-role-accueil-family-hub.png) | 1. Accueil et onboarding · 2. Inscription et connexion · 3. Choix du rôle · 4. Accueil personnel · 5. Family Hub | Oui, sauf connexion Google/Apple (plus tard) |
+| [1-5-accueil-inscription-role-accueil-family-hub.png](01-ecrans-principaux/1-5-accueil-inscription-role-accueil-family-hub.png) | 1. Accueil et onboarding · 2. Inscription et connexion · 3. Choix du rôle · 4. Accueil personnel · 5. Family Hub | Oui, sauf connexion Apple (plus tard) |
 | [6-9-creation-evenement-dashboard-taches-calendrier.png](01-ecrans-principaux/6-9-creation-evenement-dashboard-taches-calendrier.png) | 6. Création d'un événement · 7. Dashboard événementiel · 8. Gestion des tâches · 9. Calendrier | Oui ; carte du lieu plus tard |
 | [10-14-budget-invitations-album-parametres-desktop.png](01-ecrans-principaux/10-14-budget-invitations-album-parametres-desktop.png) | 10. Budget et contributions · 11. Invitations et RSVP · 12. Album photos · 13. Paramètres · 14. Version ordinateur | Oui (album en dernière étape) |
 
@@ -42,7 +42,7 @@ La colonne **V1** indique ce qui sera développé dans la première version (sit
 - **Confidentialité** : un simple membre voit les totaux du budget, pas la liste nominative des
   contributions (les écrans « Contributions » sont réservés au trésorier et à l'organisateur).
   Une contribution peut être anonyme : nom visible du seul contributeur et du trésorier.
-- **Connexion par email** uniquement en V1 (pas de Google ni d'Apple pour l'instant).
+- **Connexion** par email et par Google ; Apple et téléphone plus tard.
 - **Rôles simplifiés** : organisateur, trésorier, membre pour un événement ; l'écran « Quel est votre
   rôle ? » devient le rôle attribué par l'organisateur. Les invités répondent sans compte.
 - **Lisibilité** : textes d'au moins 14 px et barre de navigation identique sur tous les écrans.
