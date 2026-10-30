@@ -1,6 +1,7 @@
 rules_version = '2';
 
-// Bennoo — règles d'accès Firestore (étape 1 : comptes, familles, événements).
+// Bennoo — règles d'accès Firestore (étapes 1 à 4 : comptes, familles, événements, tâches,
+// budget et contributions, invités et réponses).
 //
 // Ces règles SONT la sécurité de l'application : le site est public, seul Firestore
 // décide qui lit et écrit quoi. Tout ce qui n'est pas autorisé ici est refusé.
@@ -14,6 +15,13 @@ rules_version = '2';
 //   families/{fid}/invites/{token}                    lien d'invitation (7 jours)
 //   families/{fid}/events/{eid}                       événement
 //   families/{fid}/events/{eid}/participants/{uid}    rôle dans l'événement (organizer | treasurer | member)
+//     .../participants/{uid}/myContributions/{cid}    index personnel « mes contributions »
+//   families/{fid}/events/{eid}/tasks/{tid}           tâche
+//   families/{fid}/events/{eid}/expenses/{xid}        dépense (organisateur et trésorier)
+//   families/{fid}/events/{eid}/contributions/{cid}   contribution (+ private/identity si anonyme)
+//   families/{fid}/events/{eid}/summary/{budget|guests}  totaux lisibles par tous les participants
+//   families/{fid}/events/{eid}/guests/{jeton}        foyer invité, répond sans compte avec son lien
+//   families/{fid}/events/{eid}/public/invitation     carton d'invitation lisible avec le lien
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -40,6 +48,15 @@ service cloud.firestore {
     function isParticipant(fid, eid) { return exists(participantPath(fid, eid, me())); }
     function eventRole(fid, eid) { return get(participantPath(fid, eid, me())).data.role; }
     function isOrganizer(fid, eid) { return isParticipant(fid, eid) && eventRole(fid, eid) == 'organizer'; }
+    function isTreasurer(fid, eid) { return isParticipant(fid, eid) && eventRole(fid, eid) == 'treasurer'; }
+    function isManager(fid, eid) { return isParticipant(fid, eid) && eventRole(fid, eid) in ['organizer', 'treasurer']; }
+    function nat(v) { return v is int && v >= 0 && v <= 100000000000; }
+    function money(v) { return v is int && v > 0 && v <= 100000000000; }
+    function optDate(v) { return v == null || v is timestamp; }
+    function contributionPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/contributions/$(cid); }
+    function identityPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/contributions/$(cid)/private/identity; }
+    function myContributionPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/participants/$(me())/myContributions/$(cid); }
+    function eventTypes() { return ['WEDDING', 'NAMING_CEREMONY', 'COMMUNION', 'BIRTHDAY', 'RELIGIOUS_CEREMONY', 'FAMILY_REUNION', 'TRADITIONAL_CEREMONY', 'CUSTOM']; }
 
     // ─── Profil : visible et modifiable par son seul propriétaire ────────────
     match /users/{userId} {
@@ -165,6 +182,150 @@ service cloud.firestore {
             (isOrganizer(fid, eid) && pid != me())
             || (pid == me() && resource.data.role != 'organizer')
           );
+
+          // Index personnel des contributions : visible et modifiable par son seul propriétaire.
+          match /myContributions/{cid} {
+            allow read, delete: if verified() && pid == me();
+            allow create: if verified() && pid == me() && data().keys().hasOnly(['createdAt'])
+              && data().createdAt == request.time
+              && getAfter(identityPath(fid, eid, cid)).data.uid == me();
+          }
+        }
+
+        // ─── Tâches : tous les participants les voient ─────────────────────
+        match /tasks/{tid} {
+          function validTask() {
+            return data().keys().hasOnly(['title', 'notes', 'dueAt', 'status', 'assigneeUid', 'assigneeName', 'createdBy', 'createdAt', 'updatedAt'])
+              && text(data().title, 1, 120) && optText(data().notes, 1000) && optDate(data().dueAt)
+              && data().status in ['todo', 'doing', 'done']
+              && ((data().assigneeUid == null && data().assigneeName == null)
+                || (data().assigneeUid is string && exists(participantPath(fid, eid, data().assigneeUid)) && text(data().assigneeName, 1, 80)))
+              && data().updatedAt == request.time;
+          }
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && isOrganizer(fid, eid) && validTask()
+            && data().createdBy == me() && data().createdAt == request.time;
+          // L'organisateur modifie tout ; le responsable d'une tâche change seulement son statut.
+          allow update: if verified() && validTask()
+            && data().createdBy == resource.data.createdBy && data().createdAt == resource.data.createdAt
+            && (isOrganizer(fid, eid) || (resource.data.assigneeUid == me() && changed().hasOnly(['status', 'updatedAt'])));
+          allow delete: if verified() && isOrganizer(fid, eid);
+        }
+
+        // ─── Dépenses : organisateur et trésorier seulement ────────────────
+        match /expenses/{xid} {
+          function validExpense() {
+            return data().keys().hasOnly(['label', 'category', 'amount', 'supplier', 'spentAt', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+              && text(data().label, 1, 120)
+              && data().category in ['VENUE', 'CATERING', 'DECOR', 'OUTFITS', 'PHOTO', 'MUSIC', 'TRANSPORT', 'GIFTS', 'OTHER']
+              && money(data().amount) && optText(data().supplier, 120) && optDate(data().spentAt)
+              && data().status in ['pending', 'paid'] && data().updatedAt == request.time;
+          }
+          allow read: if verified() && isManager(fid, eid);
+          allow create: if verified() && isManager(fid, eid) && validExpense()
+            && data().createdBy == me() && data().createdAt == request.time;
+          allow update: if verified() && isManager(fid, eid) && validExpense()
+            && data().createdBy == resource.data.createdBy && data().createdAt == resource.data.createdAt;
+          allow delete: if verified() && isManager(fid, eid);
+        }
+
+        // ─── Contributions ─────────────────────────────────────────────────
+        // Pas de paiement dans l'application : on déclare, le trésorier confirme.
+        // Anonymat : displayName est vide ; l'identité est dans private/identity, lisible
+        // par le contributeur et le trésorier seulement (l'organisateur ne la voit pas).
+        match /contributions/{cid} {
+          function validContribution() {
+            return data().keys().hasOnly(['amount', 'status', 'anonymous', 'displayName', 'source', 'note', 'createdAt', 'updatedAt'])
+              && money(data().amount) && data().status in ['promised', 'declared', 'confirmed']
+              && ((data().anonymous == true && data().displayName == null) || (data().anonymous == false && text(data().displayName, 1, 80)))
+              && data().source in ['self', 'treasurer'] && optText(data().note, 200)
+              && data().updatedAt == request.time;
+          }
+          function isMine() { return exists(myContributionPath(fid, eid, cid)); }
+          allow get: if verified() && (isManager(fid, eid) || isMine());
+          allow list: if verified() && isManager(fid, eid);
+          allow create: if verified() && validContribution() && data().createdAt == request.time && (
+            // un participant, pour lui-même : promise ou déclarée, jamais confirmée
+            (data().source == 'self' && isParticipant(fid, eid) && data().status in ['promised', 'declared']
+              && (data().anonymous == true || data().displayName == get(participantPath(fid, eid, me())).data.displayName)
+              && getAfter(identityPath(fid, eid, cid)).data.uid == me()
+              && existsAfter(myContributionPath(fid, eid, cid)))
+            // le trésorier, pour un proche sans compte
+            || (data().source == 'treasurer' && isTreasurer(fid, eid) && data().anonymous == false)
+          );
+          allow update: if verified() && validContribution()
+            && data().source == resource.data.source && data().createdAt == resource.data.createdAt
+            && data().anonymous == resource.data.anonymous && data().displayName == resource.data.displayName
+            && (
+              (isTreasurer(fid, eid) && changed().hasOnly(['status', 'amount', 'note', 'updatedAt']))
+              || (isMine() && resource.data.status != 'confirmed' && data().status in ['promised', 'declared']
+                && changed().hasOnly(['amount', 'status', 'note', 'updatedAt']))
+            );
+          allow delete: if verified() && (isTreasurer(fid, eid) || (isMine() && resource.data.status != 'confirmed'));
+
+          match /private/{docId} {
+            allow get: if verified() && docId == 'identity' && (isTreasurer(fid, eid) || resource.data.uid == me());
+            allow create: if verified() && docId == 'identity' && data().keys().hasOnly(['uid', 'displayName'])
+              && data().uid == me() && data().displayName == get(participantPath(fid, eid, me())).data.displayName
+              && !exists(contributionPath(fid, eid, cid)) && getAfter(contributionPath(fid, eid, cid)).data.source == 'self';
+            allow delete: if verified() && docId == 'identity' && (isTreasurer(fid, eid) || resource.data.uid == me());
+            allow list, update: if false;
+          }
+        }
+
+        // ─── Totaux partagés : un simple membre ne voit que ces chiffres ──
+        match /summary/{sid} {
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create, update: if verified() && data().updatedAt == request.time && (
+            (sid == 'budget' && isManager(fid, eid)
+              && data().keys().hasOnly(['spent', 'paid', 'confirmed', 'pending', 'contributors', 'updatedAt'])
+              && nat(data().spent) && nat(data().paid) && nat(data().confirmed) && nat(data().pending) && nat(data().contributors))
+            || (sid == 'guests' && isOrganizer(fid, eid)
+              && data().keys().hasOnly(['households', 'invited', 'yes', 'no', 'pending', 'attending', 'updatedAt'])
+              && nat(data().households) && nat(data().invited) && nat(data().yes) && nat(data().no)
+              && nat(data().pending) && nat(data().attending))
+          );
+          allow delete: if false;
+        }
+
+        // ─── Invités : liste réservée aux organisateurs ; réponse sans compte ──
+        // L'identifiant du document est un jeton secret de 43 caractères : qui a le lien
+        // peut lire SON invitation et y répondre, rien d'autre.
+        match /guests/{token} {
+          function validGuest() {
+            return data().keys().hasOnly(['household', 'phone', 'seats', 'response', 'attending', 'message', 'respondedAt', 'createdBy', 'createdAt'])
+              && text(data().household, 1, 120)
+              && (data().phone == null || (data().phone is string && data().phone.matches('^\\+[1-9][0-9]{6,14}$')))
+              && data().seats is int && data().seats >= 1 && data().seats <= 50
+              && data().response in ['pending', 'yes', 'no'] && optText(data().message, 500);
+          }
+          allow get: if true;
+          allow list: if verified() && isOrganizer(fid, eid);
+          allow create: if verified() && isOrganizer(fid, eid) && token.size() == 43 && validGuest()
+            && data().response == 'pending' && data().attending == null && data().message == null && data().respondedAt == null
+            && data().createdBy == me() && data().createdAt == request.time;
+          allow update: if validGuest() && (
+            // l'invité répond (oui avec 1 à « places » personnes, ou non)
+            (changed().hasOnly(['response', 'attending', 'message', 'respondedAt']) && data().respondedAt == request.time
+              && ((data().response == 'yes' && data().attending is int && data().attending >= 1 && data().attending <= data().seats)
+                || (data().response == 'no' && data().attending == 0)))
+            // l'organisateur corrige le foyer
+            || (verified() && isOrganizer(fid, eid) && changed().hasOnly(['household', 'phone', 'seats'])
+              && (data().attending == null || data().attending <= data().seats))
+          );
+          allow delete: if verified() && isOrganizer(fid, eid);
+        }
+
+        // ─── Carton d'invitation : lisible avec le lien, publié par l'organisateur ──
+        match /public/{docId} {
+          allow get: if docId == 'invitation';
+          allow list, delete: if false;
+          allow create, update: if verified() && isOrganizer(fid, eid) && docId == 'invitation'
+            && data().keys().hasOnly(['title', 'type', 'startsAt', 'venue', 'city', 'hosts', 'message', 'updatedAt'])
+            && text(data().title, 1, 120) && data().type in eventTypes() && optDate(data().startsAt)
+            && optText(data().venue, 200) && optText(data().city, 120)
+            && optText(data().hosts, 120) && optText(data().message, 500)
+            && data().updatedAt == request.time;
         }
       }
     }
