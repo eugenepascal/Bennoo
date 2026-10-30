@@ -54,6 +54,13 @@ async function signInWithGoogle() {
   try {
     await auth.signInWithPopup(provider);
   } catch (err) {
+    // Safari ferme parfois la mémoire locale (IndexedDB) pendant que la fenêtre Google est ouverte :
+    // Firebase renvoie alors « Database is closing/hidden » alors que la connexion a souvent réussi.
+    if (/closing|hidden|indexed ?db|database/i.test(String(err && err.message))) {
+      for (let i = 0; i < 20 && !auth.currentUser; i++) await new Promise((r) => setTimeout(r, 150));
+      if (auth.currentUser) return;
+      throw Object.assign(new Error("Le navigateur a interrompu la connexion Google. Rechargez la page puis réessayez ; si cela se reproduit, essayez avec Chrome ou utilisez votre email."), { code: undefined });
+    }
     if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(err.code)) {
       await auth.signInWithRedirect(provider);
       return;
