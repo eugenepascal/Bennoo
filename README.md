@@ -1,50 +1,37 @@
-# Bennoo
+# Bennoo — Une cérémonie, toute la famille, un seul endroit.
 
-**Une cérémonie, toute la famille, un seul endroit.**
-
-Bennoo aide les familles du Sénégal et de la diaspora à organiser ensemble leurs événements :
-mariages, baptêmes / ngenté, communions, anniversaires, réunions familiales.
-
-## Principe technique
-
-- Site web statique (HTML, CSS, JavaScript sans étape de compilation) dans `public/`.
-- **Firebase** : Authentication (email + mot de passe), Firestore (données), Hosting.
-- La sécurité est assurée par [`firestore.rules`](firestore.rules), testées automatiquement.
-
-Voir [`docs/decisions.md`](docs/decisions.md) pour les choix et [`docs/status.md`](docs/status.md)
-pour l'état exact de chaque fonctionnalité.
+Application web statique (HTML/CSS/JS, aucune étape de compilation) pour organiser les
+événements familiaux : mariages, baptêmes / ngenté, communions, anniversaires, réunions.
 
 ## Structure
+- `index.html` — page principale
+- `css/styles.css` — tous les styles (d'après les maquettes)
+- `js/app.js` — toute la logique de l'application
+- `images/` — logo et illustrations
+- `firestore.rules` — règles d'accès à coller dans la console Firebase
+- `maquettes/` — maquettes de référence
 
-```
-public/index.html        page unique de l'application
-public/js/app.js         démarrage et navigation (#/…)
-public/js/screens.js     écrans (conformes aux maquettes du dossier maquettes/)
-public/js/ui.js          barre de navigation, avatars, icônes
-public/js/data.js        lectures et écritures Firestore
-public/js/lib/format.js  fonctions pures (validation, montants, dates, liens)
-public/js/config.js      configuration du projet Firebase (à compléter)
-firestore.rules          règles d'accès
-tests/unit               tests des fonctions pures
-tests/rules              tests des règles d'accès (émulateur Firestore)
-tests/e2e                parcours complet dans un navigateur (émulateurs + Playwright)
-```
+## Ce qui fonctionne (étape 1)
+Lancement et présentation, inscription par email (prénom, nom, conditions), connexion,
+mot de passe oublié, vérification de l'email, accueil personnel, Family Hub (membres,
+événements, invitation par lien WhatsApp), détail d'un membre, création d'un événement
+en 5 étapes, tableau de bord de l'événement, participants et rôles, paramètres et profil.
 
-## Lancer en local
+Prochaines étapes : tâches, budget et contributions, invités et RSVP, album photos.
 
-Prérequis : Node.js 22, Java 21 (pour les émulateurs Firebase).
+## Relier Firebase
+1. Créer le projet Firebase « bennoo » (région Europe).
+2. Authentication : activer « Adresse e-mail / Mot de passe ».
+3. Firestore : créer la base, puis coller le contenu de `firestore.rules` dans l'onglet Règles et publier.
+4. Firestore > Index : ajouter une exception sur le champ `uid` en portée « groupe de collections »
+   pour `members` et pour `participants`.
+5. Copier la configuration web (`firebaseConfig`) en haut de `js/app.js`.
+6. Authentication > Paramètres > Domaines autorisés : ajouter le domaine du site.
 
-```bash
-npm install
-npm run serve          # site + émulateurs sur http://127.0.0.1:5000 (aucune donnée réelle)
-npm run test:unit
-npm run test:rules
-npm run test:e2e       # nécessite : npx playwright install chromium
-```
+Tant que Firebase n'est pas relié, les écrans s'affichent mais l'inscription et la connexion
+indiquent qu'elles ne sont pas encore activées.
 
-## Mettre en ligne
-
-1. Créer un projet sur console.firebase.google.com (région Europe), activer
-   Authentication > Email/Mot de passe, et Firestore.
-2. Copier la configuration web dans `public/js/config.js`.
-3. `npx firebase login` puis `npx firebase deploy --only firestore,hosting --project <id-du-projet>`.
+## Voir la page
+- En local : ouvrir `index.html` dans le navigateur.
+- En ligne : GitHub Pages (Settings → Pages, branche `main`, dossier `/ (root)`).
+  Pour un dépôt privé, GitHub Pages demande un compte GitHub payant ; sinon, Firebase Hosting.

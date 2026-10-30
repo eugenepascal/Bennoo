@@ -1,20 +1,489 @@
+/* =========================================================================
+   Bennoo — Une cérémonie, toute la famille, un seul endroit.
+   Application web statique (HTML/CSS/JS, aucune étape de compilation).
+   Données : Firebase (Authentication par email + Firestore).
+   ========================================================================= */
+(() => {
+"use strict";
+
+/* ---------- Firebase ----------
+   À compléter avec la configuration web du projet Firebase « Bennoo »
+   (console Firebase > Paramètres du projet > Vos applications > Web).
+   Ces valeurs ne sont pas secrètes : la sécurité repose sur les règles Firestore. */
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+};
+
+let auth = null, db = null, FIREBASE_READY = false;
+try {
+  if (firebaseConfig.apiKey && firebaseConfig.projectId && window.firebase) {
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    auth.languageCode = "fr";
+    db = firebase.firestore();
+    FIREBASE_READY = true;
+  }
+} catch (e) { console.warn("Firebase indisponible :", e); }
+
+const NOT_READY = "Bennoo n'est pas encore relié à son projet Firebase : l'inscription et la connexion ne fonctionnent pas encore.";
+function requireFirebase() { if (!FIREBASE_READY) throw new Error(NOT_READY); }
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+const Timestamp = { fromDate: (d) => firebase.firestore.Timestamp.fromDate(d), fromMillis: (ms) => firebase.firestore.Timestamp.fromMillis(ms) };
+
+/* ---------- Authentification (petites fonctions d'appel) ---------- */
+const createUserWithEmailAndPassword = (_a, email, pw) => { requireFirebase(); return auth.createUserWithEmailAndPassword(email, pw); };
+const signInWithEmailAndPassword = (_a, email, pw) => { requireFirebase(); return auth.signInWithEmailAndPassword(email, pw); };
+const signOut = () => (auth ? auth.signOut() : Promise.resolve());
+const sendEmailVerification = (user) => user.sendEmailVerification();
+const sendPasswordResetEmail = (_a, email) => { requireFirebase(); return auth.sendPasswordResetEmail(email); };
+const updateProfile = (user, p) => user.updateProfile(p);
+
+/* ---------- Données (Firestore) ----------
+   Structure :
+     users/{uid}                                     profil privé
+     families/{fid}                                  famille
+     families/{fid}/members/{uid}                    appartenance (owner | admin | member)
+     families/{fid}/invites/{jeton}                  lien d'invitation (7 jours)
+     families/{fid}/events/{eid}                     événement
+     families/{fid}/events/{eid}/participants/{uid}  rôle (organizer | treasurer | member)
+   Les règles Firestore (fichier firestore.rules) re-vérifient tout côté serveur. */
+const data = (() => {
+  const uid = () => {
+    if (!auth || !auth.currentUser) throw Object.assign(new Error("Non connecté"), { code: "permission-denied" });
+    return auth.currentUser.uid;
+  };
+  const fam = (fid) => db.collection("families").doc(fid);
+  const ev = (fid, eid) => fam(fid).collection("events").doc(eid);
+
+  async function getProfile() {
+    const s = await db.collection("users").doc(uid()).get();
+    return s.exists ? s.data() : null;
+  }
+  async function saveProfile({ displayName, phone }) {
+    const ref = db.collection("users").doc(uid());
+    const existing = await ref.get();
+    await ref.set({
+      displayName, phone, locale: "fr",
+      createdAt: existing.exists ? existing.data().createdAt : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  async function createFamily(name, displayName) {
+    const me = uid();
+    const ref = db.collection("families").doc();
+    const batch = db.batch();
+    batch.set(ref, { name, createdBy: me, createdAt: serverTimestamp() });
+    batch.set(ref.collection("members").doc(me), { uid: me, role: "owner", displayName, joinedAt: serverTimestamp() });
+    await batch.commit();
+    return ref.id;
+  }
+  async function listMyFamilies() {
+    const rows = await db.collectionGroup("members").where("uid", "==", uid()).get();
+    const list = await Promise.all(rows.docs.map(async (m) => {
+      const ref = m.ref.parent.parent;
+      const f = await ref.get();
+      return f.exists ? { id: ref.id, ...f.data(), myRole: m.data().role } : null;
+    }));
+    return list.filter(Boolean).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }
+  async function getFamily(fid) {
+    const [f, me] = await Promise.all([fam(fid).get(), fam(fid).collection("members").doc(uid()).get()]);
+    if (!f.exists || !me.exists) return null;
+    return { id: fid, ...f.data(), myRole: me.data().role };
+  }
+  async function listFamilyMembers(fid) {
+    const s = await fam(fid).collection("members").get();
+    return s.docs.map((d) => d.data()).sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
+  }
+  const setFamilyRole = (fid, memberUid, role) => fam(fid).collection("members").doc(memberUid).update({ role });
+  const removeFamilyMember = (fid, memberUid) => fam(fid).collection("members").doc(memberUid).delete();
+
+  async function createInvite(fid, familyName) {
+    const token = generateToken();
+    await fam(fid).collection("invites").doc(token).set({
+      familyName, createdBy: uid(), createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + INVITE_DAYS * 86400000),
+    });
+    return token;
+  }
+  async function listInvites(fid) {
+    const s = await fam(fid).collection("invites").get();
+    return s.docs.map((d) => ({ token: d.id, ...d.data() }))
+      .filter((i) => i.expiresAt.toMillis() > Date.now())
+      .sort((a, b) => b.expiresAt.toMillis() - a.expiresAt.toMillis());
+  }
+  const revokeInvite = (fid, token) => fam(fid).collection("invites").doc(token).delete();
+  async function getInvite(fid, token) {
+    const s = await fam(fid).collection("invites").doc(token).get();
+    if (!s.exists) return null;
+    const d = s.data();
+    return { ...d, expired: d.expiresAt.toMillis() <= Date.now() };
+  }
+  async function isFamilyMember(fid) { return (await fam(fid).collection("members").doc(uid()).get()).exists; }
+  const joinFamily = (fid, token, displayName) => fam(fid).collection("members").doc(uid()).set({
+    uid: uid(), role: "member", displayName, joinedAt: serverTimestamp(), inviteToken: token,
+  });
+
+  const payload = (e) => ({
+    type: e.type, title: e.title, description: e.description || null,
+    startsAt: e.startsAt ? Timestamp.fromDate(e.startsAt) : null,
+    venue: e.venue || null, city: e.city || null, currency: e.currency,
+    budgetPlanned: e.budgetPlanned, expectedGuests: e.expectedGuests ?? null,
+  });
+  async function createEvent(fid, e, displayName) {
+    const me = uid();
+    const ref = fam(fid).collection("events").doc();
+    const batch = db.batch();
+    batch.set(ref, { ...payload(e), status: "active", createdBy: me, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.set(ref.collection("participants").doc(me), { uid: me, role: "organizer", displayName, addedAt: serverTimestamp() });
+    await batch.commit();
+    return ref.id;
+  }
+  const updateEvent = (fid, eid, e) => ev(fid, eid).update({ ...payload(e), updatedAt: serverTimestamp() });
+  const toEvent = (fid, id, d, myRole) => ({ familyId: fid, id, ...d, startsAt: d.startsAt ? d.startsAt.toDate() : null, myRole });
+  async function listMyEvents() {
+    const rows = await db.collectionGroup("participants").where("uid", "==", uid()).get();
+    const list = await Promise.all(rows.docs.map(async (p) => {
+      const ref = p.ref.parent.parent;
+      const fid = ref.parent.parent.id;
+      const e = await ref.get();
+      return e.exists ? toEvent(fid, ref.id, e.data(), p.data().role) : null;
+    }));
+    return list.filter(Boolean).sort((a, b) => (a.startsAt?.getTime() ?? Infinity) - (b.startsAt?.getTime() ?? Infinity));
+  }
+  async function getEvent(fid, eid) {
+    const [e, me] = await Promise.all([ev(fid, eid).get(), ev(fid, eid).collection("participants").doc(uid()).get()]);
+    if (!e.exists || !me.exists) return null;
+    return toEvent(fid, eid, e.data(), me.data().role);
+  }
+  async function listParticipants(fid, eid) {
+    const s = await ev(fid, eid).collection("participants").get();
+    const order = { organizer: 0, treasurer: 1, member: 2 };
+    return s.docs.map((d) => d.data()).sort((a, b) => order[a.role] - order[b.role] || a.displayName.localeCompare(b.displayName, "fr"));
+  }
+  const addParticipant = (fid, eid, m, role) => ev(fid, eid).collection("participants").doc(m.uid).set({ uid: m.uid, role, displayName: m.displayName, addedAt: serverTimestamp() });
+  const setParticipantRole = (fid, eid, pid, role) => ev(fid, eid).collection("participants").doc(pid).update({ role });
+  const removeParticipant = (fid, eid, pid) => ev(fid, eid).collection("participants").doc(pid).delete();
+  async function getMyFamilyDisplayName(fid) {
+    const s = await fam(fid).collection("members").doc(uid()).get();
+    return s.exists ? s.data().displayName : null;
+  }
+
+  return { getProfile, saveProfile, createFamily, listMyFamilies, getFamily, listFamilyMembers, setFamilyRole, removeFamilyMember,
+    createInvite, listInvites, revokeInvite, getInvite, isFamilyMember, joinFamily, createEvent, updateEvent, listMyEvents,
+    getEvent, listParticipants, addParticipant, setParticipantRole, removeParticipant, getMyFamilyDisplayName };
+})();
+
+
+/* ---------- Fonctions pures : validation, montants, dates, liens ---------- */
+/**
+ * Fonctions pures (sans Firebase ni DOM) : validation des saisies, montants, dates, liens.
+ * Testées par tests/unit/format.test.js.
+ */
+
+const EVENT_TYPES = {
+  WEDDING: "Mariage",
+  NAMING_CEREMONY: "Baptême / Ngenté",
+  COMMUNION: "Communion",
+  BIRTHDAY: "Anniversaire",
+  RELIGIOUS_CEREMONY: "Cérémonie religieuse",
+  FAMILY_REUNION: "Réunion familiale",
+  TRADITIONAL_CEREMONY: "Cérémonie traditionnelle",
+  CUSTOM: "Événement personnalisé",
+};
+
+const FAMILY_ROLES = { owner: "Propriétaire", admin: "Administrateur", member: "Membre" };
+const EVENT_ROLES = { organizer: "Organisateur", treasurer: "Trésorier", member: "Membre" };
+const CURRENCIES = { XOF: "FCFA", EUR: "Euro" };
+
+/** Nom affiché : 1 à 80 caractères, espaces superflus retirés. */
+function cleanName(input) {
+  const v = String(input ?? "").replace(/\s+/g, " ").trim();
+  if (v.length < 1) throw new Error("Le nom est obligatoire.");
+  if (v.length > 80) throw new Error("Le nom ne doit pas dépasser 80 caractères.");
+  return v;
+}
+
+/**
+ * Téléphone au format international (+221…). Accepte « 77 123 45 67 » pour le Sénégal
+ * et « 06 12 34 56 78 » pour la France. Chaîne vide = pas de téléphone (null).
+ */
+function normalizePhone(input) {
+  const raw = String(input ?? "").replace(/[\s.\-()]/g, "");
+  if (raw === "") return null;
+  let v = raw;
+  if (v.startsWith("00")) v = "+" + v.slice(2);
+  else if (/^7[05678]\d{7}$/.test(v)) v = "+221" + v; // mobile sénégalais
+  else if (/^0[67]\d{8}$/.test(v)) v = "+33" + v.slice(1); // mobile français
+  if (!/^\+[1-9]\d{6,14}$/.test(v)) {
+    throw new Error("Numéro invalide : utilisez le format international, par exemple +221 77 123 45 67.");
+  }
+  return v;
+}
+
+/** Montant saisi -> entier en unités mineures (FCFA : unité ; EUR : centimes). */
+function parseAmount(input, currency) {
+  const digits = currency === "EUR" ? 2 : 0;
+  const s = String(input ?? "").replace(/[\s  ]/g, "").replace(",", ".");
+  if (s === "") return 0;
+  const re = digits === 0 ? /^\d+$/ : /^\d+(\.\d{1,2})?$/;
+  if (!re.test(s)) {
+    throw new Error(digits === 0 ? "Montant invalide : nombre entier en FCFA." : "Montant invalide : 2 décimales au plus.");
+  }
+  const [whole, frac = ""] = s.split(".");
+  const value = Number(whole) * 10 ** digits + Number(frac.padEnd(digits, "0") || 0);
+  if (!Number.isSafeInteger(value) || value > 100_000_000_000) throw new Error("Montant trop élevé.");
+  return value;
+}
+
+/** Entier en unités mineures -> « 6 000 000 F CFA » / « 12,50 € ». */
+function formatAmount(minor, currency) {
+  const digits = currency === "EUR" ? 2 : 0;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency", currency, minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).format(minor / 10 ** digits);
+}
+
+/** Nombre de jours avant l'événement (calendrier, fuseau de l'appareil). Négatif si passé. */
+function daysUntil(date, now = new Date()) {
+  const startOfDay = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((startOfDay(date) - startOfDay(now)) / 86_400_000);
+}
+
+function countdownLabel(date, now = new Date()) {
+  if (!date) return "Date à fixer";
+  const n = daysUntil(date, now);
+  if (n > 1) return `J-${n}`;
+  if (n === 1) return "Demain";
+  if (n === 0) return "Aujourd'hui";
+  return "Événement passé";
+}
+
+function formatDate(date) {
+  if (!date) return "Date à fixer";
+  return new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
+/** Jeton d'invitation : 32 octets aléatoires en base64url (43 caractères), impossible à deviner. */
+function generateToken(cryptoImpl = globalThis.crypto) {
+  const bytes = new Uint8Array(32);
+  cryptoImpl.getRandomValues(bytes);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function isToken(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
+}
+
+const INVITE_DAYS = 7;
+
+function inviteUrl(origin, familyId, token) {
+  return `${origin}/#/rejoindre/${encodeURIComponent(familyId)}/${token}`;
+}
+
+/** Lien de partage WhatsApp (ouvre WhatsApp avec le message pré-rempli, sans API). */
+function whatsappShareUrl(message) {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
+function inviteMessage(familyName, url) {
+  return `Bonjour ! Rejoins « ${familyName} » sur Bennoo pour organiser nos événements en famille : ${url} (lien valable ${INVITE_DAYS} jours)`;
+}
+
+/** Messages d'erreur Firebase traduits pour l'utilisateur ; jamais de détail technique. */
+function authErrorMessage(code) {
+  const map = {
+    "auth/invalid-email": "Adresse email invalide.",
+    "auth/email-already-in-use": "Un compte existe déjà avec cet email. Connectez-vous ou réinitialisez le mot de passe.",
+    "auth/weak-password": "Mot de passe trop faible : 8 caractères minimum.",
+    "auth/invalid-credential": "Email ou mot de passe incorrect.",
+    "auth/wrong-password": "Email ou mot de passe incorrect.",
+    "auth/user-not-found": "Email ou mot de passe incorrect.",
+    "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes puis réessayez.",
+    "auth/network-request-failed": "Pas de connexion internet. Vérifiez votre réseau.",
+    "permission-denied": "Action non autorisée.",
+    "unavailable": "Service momentanément indisponible. Réessayez.",
+  };
+  return map[code] ?? "Une erreur est survenue. Réessayez.";
+}
+
+function checkPassword(pw) {
+  if (typeof pw !== "string" || pw.length < 8) throw new Error("Mot de passe trop court : 8 caractères minimum.");
+  if (pw.length > 128) throw new Error("Mot de passe trop long.");
+  return pw;
+}
+
+
+/* ---------- Outils DOM (tout le texte passe par textContent) ---------- */
+/**
+ * Petit utilitaire DOM. Tout le texte passe par textContent : aucune donnée saisie par
+ * un utilisateur n'est jamais interprétée comme du HTML (protection contre le XSS).
+ */
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs ?? {})) {
+    if (v === false || v === null || v === undefined) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, String(v));
+  }
+  for (const c of children.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+
+/** Champ de formulaire accessible : libellé relié, aide et message d'erreur annoncés. */
+let fieldSeq = 0;
+function field(label, inputAttrs = {}, help = null) {
+  const id = inputAttrs.id ?? `f${++fieldSeq}`;
+  const helpId = help ? `${id}-help` : null;
+  const tag = inputAttrs.tag ?? "input";
+  const { tag: _ignored, options, ...rest } = inputAttrs;
+  const input = tag === "select"
+    ? h("select", { id, ...rest, "aria-describedby": helpId }, (options ?? []).map(([value, text]) => h("option", { value }, text)))
+    : h(tag, { id, ...rest, "aria-describedby": helpId });
+  return h("div", { class: "field" },
+    h("label", { for: id }, label),
+    input,
+    help ? h("p", { class: "help", id: helpId }, help) : null,
+  );
+}
+
+function alertBox(message, kind = "error") {
+  return h("p", { class: `alert alert-${kind}`, role: kind === "error" ? "alert" : "status" }, message);
+}
+
+/** Affiche une erreur dans un conteneur dédié d'un formulaire. */
+function showFormError(form, message) {
+  let box = form.querySelector(".form-error");
+  if (!box) {
+    box = h("div", { class: "form-error" });
+    form.prepend(box);
+  }
+  box.replaceChildren(message ? alertBox(message) : "");
+  if (message) box.scrollIntoView({ block: "nearest" });
+}
+
+/** Désactive le bouton pendant l'envoi pour éviter les doubles soumissions. */
+async function withBusy(button, fn) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.textContent = "Patientez…";
+  try {
+    return await fn();
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    button.textContent = label;
+  }
+}
+
+let toastTimer;
+function toast(message) {
+  const region = document.getElementById("toast");
+  if (!region) return;
+  region.textContent = message;
+  region.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => region.classList.remove("visible"), 3500);
+}
+
+function loading(text = "Chargement…") {
+  return h("p", { class: "loading", role: "status" }, text);
+}
+
+function emptyState(title, text) {
+  return h("div", { class: "empty" }, h("p", { class: "empty-title" }, title), text ? h("p", {}, text) : null);
+}
+
+function card(...children) {
+  return h("section", { class: "card" }, ...children);
+}
+
+
+/* ---------- Interface commune : icônes, avatars, navigation ---------- */
+/**
+ * Éléments d'interface communs : icônes, avatars, en-têtes, barre de navigation.
+ */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const ICONS = {
+  home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
+  family: "M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c0-3.3 2.7-6 6-6s6 2.7 6 6zm12.5 0c0-2-.6-3.8-1.7-5.2.9-.5 2-.8 3.2-.8 3.3 0 6 2.7 6 6z",
+  more: "M5 12a2 2 0 1 0 0-.01zM12 12a2 2 0 1 0 0-.01zM19 12a2 2 0 1 0 0-.01z",
+};
+
+function icon(name) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("fill", "currentColor");
+  const p = document.createElementNS(SVG_NS, "path");
+  p.setAttribute("d", ICONS[name]);
+  svg.append(p);
+  return svg;
+}
+
+/** Barre de navigation : seules les rubriques déjà développées apparaissent (pas de lien mort). */
+function tabbar(active) {
+  const link = (href, name, label, key) =>
+    h("a", { href, "aria-current": active === key ? "page" : null }, icon(name), h("span", {}, label));
+  return h("nav", { class: "tabbar", "aria-label": "Navigation principale" },
+    h("a", { href: "#/", class: "brand-side" }, h("img", { src: "images/logo.svg", alt: "" }), "Bennoo"),
+    link("#/", "home", "Accueil", "home"),
+    link("#/familles", "family", "Famille", "family"),
+    link("#/plus", "more", "Plus", "more"),
+  );
+}
+
+const AVATAR_COLORS = ["#6d28d9", "#b7791f", "#0e7490", "#be185d", "#4d7c0f", "#1d4ed8", "#9333ea", "#c2410c"];
+function initials(name) {
+  const parts = String(name || "?").trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+function avatar(name, cls = "") {
+  let hash = 0;
+  for (const c of String(name)) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+  const el = h("span", { class: `avatar ${cls}`, "aria-hidden": "true" }, initials(name));
+  el.style.background = AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  return el;
+}
+
+function header(title, backHref) {
+  return h("div", { class: "screen-head" },
+    backHref ? h("a", { href: backHref, class: "back", "aria-label": "Retour" }, "‹") : null,
+    h("h1", {}, title),
+  );
+}
+
+const EVENT_ICONS = {
+  WEDDING: "💍", NAMING_CEREMONY: "👶", COMMUNION: "🕊️", BIRTHDAY: "🎂",
+  RELIGIOUS_CEREMONY: "🕌", FAMILY_REUNION: "👨‍👩‍👧‍👦", TRADITIONAL_CEREMONY: "🥁", CUSTOM: "✨",
+};
+
+
+/* ---------- Écrans (conformes aux maquettes du dossier maquettes/) ---------- */
 /**
  * Écrans de l'étape 1, construits d'après les maquettes (dossier maquettes/ du dépôt).
  * Chaque bouton déclenche une vraie action ; aucune donnée d'exemple n'est affichée.
  * Les rubriques des étapes suivantes (tâches, budget, invités, album) n'apparaissent pas encore.
  */
-import { h, field, alertBox, showFormError, withBusy, toast } from "./dom.js";
-import { avatar, header, EVENT_ICONS } from "./ui.js";
-import {
-  auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification,
-  sendPasswordResetEmail, updateProfile,
-} from "./firebase.js";
-import * as data from "./data.js";
-import {
-  EVENT_TYPES, FAMILY_ROLES, EVENT_ROLES, CURRENCIES, cleanName, normalizePhone, parseAmount, formatAmount,
-  countdownLabel, daysUntil, formatDate, inviteUrl, whatsappShareUrl, inviteMessage, authErrorMessage,
-  checkPassword, isToken,
-} from "./lib/format.js";
+
+
+
+
 
 const errMsg = (err) => (err?.code ? authErrorMessage(err.code) : err?.message || authErrorMessage());
 const values = (form) => Object.fromEntries(new FormData(form).entries());
@@ -39,10 +508,10 @@ function passwordField(label, name, autocomplete, help) {
 }
 
 // ─── 1. Écran de lancement ────────────────────────────────────────────────
-export function launchScreen() {
+function launchScreen() {
   const node = h("main", { class: "launch", id: "contenu" },
     h("div", {},
-      h("img", { src: "/img/logo.svg", alt: "", class: "logo", width: 108, height: 108 }),
+      h("img", { src: "images/logo.svg", alt: "", class: "logo", width: 108, height: 108 }),
       h("h1", {}, "Bennoo"),
       h("p", { class: "tag" }, "Ensemble pour vos moments précieux"),
     ),
@@ -50,6 +519,7 @@ export function launchScreen() {
     h("div", { class: "actions" },
       h("a", { href: "#/decouvrir/0", class: "btn btn-primary btn-block" }, "Commencer"),
       h("a", { href: "#/connexion", class: "btn btn-light btn-block" }, "Se connecter"),
+      FIREBASE_READY ? null : h("p", { class: "small" }, "Aperçu : la connexion sera activée dès que le projet Firebase sera relié."),
     ),
   );
   return { node, title: "Bienvenue" };
@@ -61,7 +531,7 @@ const SLIDES = [
   { art: "📋", title: "Une organisation plus simple", text: "Répartissez les rôles, invitez vos proches et suivez la préparation ensemble." },
   { art: "📸", title: "Des souvenirs pour toujours", text: "Gardez au même endroit les moments importants de votre famille." },
 ];
-export function onboardingScreen(i) {
+function onboardingScreen(i) {
   const idx = Math.min(Math.max(i, 0), SLIDES.length - 1);
   const s = SLIDES[idx];
   const last = idx === SLIDES.length - 1;
@@ -79,7 +549,7 @@ export function onboardingScreen(i) {
 }
 
 // ─── 3. Inscription ───────────────────────────────────────────────────────
-export function signupScreen() {
+function signupScreen() {
   const form = h("form", { class: "form", novalidate: true },
     h("div", { class: "row-2" },
       field("Prénom", { name: "firstName", class: "input", autocomplete: "given-name", required: true, maxlength: 40 }),
@@ -121,7 +591,7 @@ export function signupScreen() {
 }
 
 // ─── Connexion ────────────────────────────────────────────────────────────
-export function loginScreen() {
+function loginScreen() {
   const form = h("form", { class: "form", novalidate: true },
     field("Email", { name: "email", type: "email", class: "input", autocomplete: "email", inputmode: "email", required: true }),
     passwordField("Mot de passe", "password", "current-password"),
@@ -143,7 +613,7 @@ export function loginScreen() {
   const node = bare(
     h("a", { href: "#/", class: "back", "aria-label": "Retour" }, "‹"),
     h("div", { class: "auth-brand" },
-      h("img", { src: "/img/logo.svg", alt: "", width: 64, height: 64 }),
+      h("img", { src: "images/logo.svg", alt: "", width: 64, height: 64 }),
       h("h1", {}, "Bienvenue sur Bennoo"),
       h("p", { class: "muted" }, "Connectez-vous pour retrouver votre famille."),
     ),
@@ -153,7 +623,7 @@ export function loginScreen() {
   return { node, title: "Connexion" };
 }
 
-export function resetScreen() {
+function resetScreen() {
   const form = h("form", { class: "form", novalidate: true },
     field("Email du compte", { name: "email", type: "email", class: "input", autocomplete: "email", required: true }),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, "Recevoir un lien"),
@@ -174,7 +644,7 @@ export function resetScreen() {
   return { node: bare(header("Mot de passe oublié", "#/connexion"), form), title: "Mot de passe oublié" };
 }
 
-export function verifyScreen(user) {
+function verifyScreen(user) {
   const status = h("div", { "aria-live": "polite" });
   const check = h("button", { type: "button", class: "btn btn-primary btn-block" }, "J'ai cliqué sur le lien");
   check.addEventListener("click", () => withBusy(check, async () => {
@@ -198,7 +668,7 @@ export function verifyScreen(user) {
   const out = h("button", { type: "button", class: "link-btn" }, "Utiliser un autre compte");
   out.addEventListener("click", () => signOut(auth));
   const node = bare(
-    h("div", { class: "auth-brand" }, h("img", { src: "/img/logo.svg", alt: "", width: 64, height: 64 }), h("h1", {}, "Vérifiez votre adresse email")),
+    h("div", { class: "auth-brand" }, h("img", { src: "images/logo.svg", alt: "", width: 64, height: 64 }), h("h1", {}, "Vérifiez votre adresse email")),
     h("p", { class: "muted" }, "Nous avons envoyé un lien à ", h("strong", {}, user.email), ". Cliquez dessus pour activer votre compte, puis revenez ici."),
     status, check, resend, h("p", { class: "or" }, out),
   );
@@ -240,7 +710,7 @@ function createFamilyForm(displayName) {
   return form;
 }
 
-export async function homeScreen() {
+async function homeScreen() {
   const [profile, families, events] = await Promise.all([data.getProfile(), data.listMyFamilies(), data.listMyEvents()]);
   const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
   const famName = Object.fromEntries(families.map((f) => [f.id, f.name]));
@@ -273,7 +743,7 @@ export async function homeScreen() {
 }
 
 // ─── 5. Familles et Family Hub ────────────────────────────────────────────
-export async function familiesScreen() {
+async function familiesScreen() {
   const [families, profile] = await Promise.all([data.listMyFamilies(), data.getProfile()]);
   if (families.length === 1) {
     location.hash = `#/famille/${enc(families[0].id)}`;
@@ -292,7 +762,7 @@ export async function familiesScreen() {
   return { node, title: "Mes familles", nav: "family" };
 }
 
-export async function familyScreen(fid, tab = "membres") {
+async function familyScreen(fid, tab = "membres") {
   const family = await data.getFamily(fid);
   if (!family) return notFoundScreen();
   const [members, events] = await Promise.all([data.listFamilyMembers(fid), data.listMyEvents()]);
@@ -376,7 +846,7 @@ function roleSelect(label, roles, current, onChange) {
   return select;
 }
 
-export async function memberScreen(fid, uid) {
+async function memberScreen(fid, uid) {
   const family = await data.getFamily(fid);
   if (!family) return notFoundScreen();
   const members = await data.listFamilyMembers(fid);
@@ -418,7 +888,7 @@ export async function memberScreen(fid, uid) {
   return { node, title: m.displayName, nav: "family" };
 }
 
-export async function joinScreen(fid, token) {
+async function joinScreen(fid, token) {
   if (!isToken(token)) return notFoundScreen("Ce lien d'invitation n'est pas valide.");
   if (await data.isFamilyMember(fid).catch(() => false)) {
     location.hash = `#/famille/${enc(fid)}`;
@@ -449,7 +919,7 @@ export async function joinScreen(fid, token) {
 // ─── 6. Création d'un événement (5 étapes) ────────────────────────────────
 const WIZARD = ["Type d'événement", "Informations", "Lieu et date", "Budget", "Participants"];
 
-export async function newEventScreen(presetFid) {
+async function newEventScreen(presetFid) {
   const families = await data.listMyFamilies();
   if (families.length === 0) {
     location.hash = "#/";
@@ -585,7 +1055,7 @@ export async function newEventScreen(presetFid) {
 }
 
 // ─── 7. Tableau de bord de l'événement ────────────────────────────────────
-export async function eventScreen(fid, eid, tab) {
+async function eventScreen(fid, eid, tab) {
   const [event, family] = await Promise.all([data.getEvent(fid, eid), data.getFamily(fid)]);
   if (!event || !family) return notFoundScreen("Cet événement n'existe pas, ou vous n'y participez pas.");
   const participants = await data.listParticipants(fid, eid);
@@ -722,7 +1192,7 @@ function editEventForm(fid, eid, e, base) {
 }
 
 // ─── 13. Paramètres et profil ─────────────────────────────────────────────
-export async function settingsScreen() {
+async function settingsScreen() {
   const profile = await data.getProfile();
   const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
   const out = h("button", { type: "button", class: "item link-row danger" }, h("span", { class: "ico", "aria-hidden": "true" }, "⎋"), h("span", { class: "grow" }, h("span", { class: "title danger" }, "Se déconnecter")));
@@ -742,7 +1212,7 @@ export async function settingsScreen() {
   return { node, title: "Paramètres", nav: "more" };
 }
 
-export async function profileScreen() {
+async function profileScreen() {
   const profile = (await data.getProfile()) ?? { displayName: auth.currentUser.displayName ?? "", phone: null };
   const form = h("form", { class: "card form", novalidate: true },
     field("Nom affiché", { name: "displayName", class: "input", required: true, maxlength: 80, value: profile.displayName, autocomplete: "name" }),
@@ -767,7 +1237,7 @@ export async function profileScreen() {
   return { node: screen(header("Mon profil", "#/plus"), form), title: "Mon profil", nav: "more" };
 }
 
-export function termsScreen() {
+function termsScreen() {
   const p = (t) => h("p", {}, t);
   const node = bare(header("Conditions et confidentialité", "#/"),
     h("section", { class: "card form" },
@@ -782,10 +1252,85 @@ export function termsScreen() {
 }
 
 // ─── Erreurs ──────────────────────────────────────────────────────────────
-export function notFoundScreen(message = "Cette page n'existe pas, ou vous n'y avez pas accès.") {
+function notFoundScreen(message = "Cette page n'existe pas, ou vous n'y avez pas accès.") {
   return { node: bare(h("section", { class: "card form" }, h("h1", {}, "Introuvable"), h("p", {}, message), h("a", { href: "#/", class: "btn btn-primary btn-block" }, "Retour à l'accueil"))), title: "Introuvable" };
 }
 
-export function errorScreen(err) {
+function errorScreen(err) {
   return { node: bare(h("section", { class: "card form" }, h("h1", {}, "Une erreur est survenue"), alertBox(errMsg(err)), h("a", { href: "#/", class: "btn btn-primary btn-block" }, "Retour à l'accueil"))), title: "Erreur" };
 }
+
+
+/* ---------- Navigation ----------
+   Routage par ancre (#/...) : fonctionne sur GitHub Pages et en ouvrant simplement index.html.
+   Chaque écran renvoie { node, title, nav } ; nav = onglet actif (null : écran sans barre). */
+const root = document.getElementById("app");
+document.getElementById("skip")?.addEventListener("click", () => root.querySelector("h1")?.focus());
+
+function show({ node, title, nav = null }) {
+  document.body.classList.toggle("with-nav", Boolean(nav));
+  root.replaceChildren(node, nav ? tabbar(nav) : "");
+  document.title = title ? `${title} · Bennoo` : "Bennoo";
+  const heading = root.querySelector("h1");
+  if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
+  window.scrollTo(0, 0);
+}
+
+let currentUser = null;
+let ready = false;
+let seq = 0;
+
+async function route() {
+  if (!ready) return;
+  const mySeq = ++seq;
+  const path = location.hash.replace(/^#/, "") || "/";
+  const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
+  const [head, a, b] = parts;
+  const render = async (promise) => {
+    try {
+      const result = await promise;
+      if (mySeq === seq && result) show(result); // un écran plus récent a déjà été demandé
+    } catch (err) {
+      console.error(err);
+      if (mySeq === seq) show(errorScreen(err));
+    }
+  };
+
+  if (head === "conditions") return render(termsScreen());
+  if (!currentUser) {
+    // Un lien d'invitation ouvert sans être connecté est gardé pour après la connexion.
+    if (head === "rejoindre") sessionStorage.setItem("bennoo:after-login", path);
+    if (head === "inscription") return render(signupScreen());
+    if (head === "connexion") return render(loginScreen());
+    if (head === "mot-de-passe-oublie") return render(resetScreen());
+    if (head === "decouvrir") return render(onboardingScreen(Number(a) || 0));
+    return render(launchScreen());
+  }
+  if (!currentUser.emailVerified) return render(verifyScreen(currentUser));
+  if (["connexion", "inscription", "mot-de-passe-oublie", "decouvrir"].includes(head)) { location.hash = "#/"; return; }
+  const pending = sessionStorage.getItem("bennoo:after-login");
+  if (pending) { sessionStorage.removeItem("bennoo:after-login"); location.hash = pending; return; }
+
+  if (!head) return render(homeScreen());
+  if (head === "familles") return render(familiesScreen());
+  if (head === "famille" && a && b === "membre" && parts[3]) return render(memberScreen(a, parts[3]));
+  if (head === "famille" && a) return render(familyScreen(a, b));
+  if (head === "nouvel-evenement") return render(newEventScreen(a));
+  if (head === "evenement" && a && b) return render(eventScreen(a, b, parts[3]));
+  if (head === "rejoindre" && a && b) return render(joinScreen(a, b));
+  if (head === "plus") return render(settingsScreen());
+  if (head === "profil") return render(profileScreen());
+  return render(notFoundScreen());
+}
+
+window.addEventListener("hashchange", route);
+// Après vérification de l'email, l'écran « vérifiez votre email » relance le routage.
+window.addEventListener("bennoo:refresh", () => { currentUser = auth.currentUser; route(); });
+
+if (FIREBASE_READY) {
+  auth.onAuthStateChanged((u) => { currentUser = u; ready = true; route(); });
+} else {
+  ready = true;
+  route();
+}
+})();

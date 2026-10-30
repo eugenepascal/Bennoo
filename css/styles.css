@@ -24,7 +24,7 @@
   --radius: 18px;
   --shadow: 0 1px 2px rgba(46, 16, 101, .05), 0 8px 24px rgba(46, 16, 101, .07);
   --nav-h: 68px;
-  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Poppins", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   background: var(--violet-50);
   line-height: 1.45;
