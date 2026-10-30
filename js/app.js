@@ -195,7 +195,7 @@ const data = (() => {
     type: e.type, title: e.title, description: e.description || null,
     startsAt: e.startsAt ? Timestamp.fromDate(e.startsAt) : null,
     venue: e.venue || null, city: e.city || null, currency: e.currency,
-    budgetPlanned: e.budgetPlanned, expectedGuests: e.expectedGuests ?? null,
+    budgetPlanned: e.budgetPlanned, expectedGuests: e.expectedGuests ?? null, cover: e.cover || null,
   });
   async function createEvent(fid, e, displayName) {
     const me = uid();
@@ -309,17 +309,19 @@ const orga = (() => {
   const contrib = (fid, eid, cid) => ev(fid, eid).collection("contributions").doc(cid);
   const mine = (fid, eid, cid) => ev(fid, eid).collection("participants").doc(uid()).collection("myContributions").doc(cid);
   /** Contribution d'un participant pour lui-même (promise ou déclarée), anonyme ou non. */
-  async function createMyContribution(fid, eid, { amount, status, anonymous, note }, myName) {
+  async function createMyContribution(fid, eid, { amount, status, anonymous, note, kind, item, origin }, myName) {
     const ref = ev(fid, eid).collection("contributions").doc();
     const batch = db.batch();
-    batch.set(ref, { amount, status, anonymous, displayName: anonymous ? null : myName, source: "self", note: note || null, createdAt: now(), updatedAt: now() });
+    batch.set(ref, { amount, status, anonymous, displayName: anonymous ? null : myName, source: "self", note: note || null,
+      kind, item: kind === "inkind" ? item : null, origin, createdAt: now(), updatedAt: now() });
     batch.set(ref.collection("private").doc("identity"), { uid: uid(), displayName: myName });
     batch.set(mine(fid, eid, ref.id), { createdAt: now() });
     await batch.commit();
   }
   /** Don reçu enregistré par le trésorier (par exemple d'un proche sans compte). */
-  const recordContribution = (fid, eid, { amount, status, displayName, note }) => ev(fid, eid).collection("contributions").add({
-    amount, status, anonymous: false, displayName, source: "treasurer", note: note || null, createdAt: now(), updatedAt: now(),
+  const recordContribution = (fid, eid, { amount, status, displayName, note, kind, item, origin }) => ev(fid, eid).collection("contributions").add({
+    amount, status, anonymous: false, displayName, source: "treasurer", note: note || null,
+    kind, item: kind === "inkind" ? item : null, origin, createdAt: now(), updatedAt: now(),
   });
   const toContribution = (d) => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) });
   async function listContributions(fid, eid) {
@@ -339,7 +341,7 @@ const orga = (() => {
     return list.filter(Boolean).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
   const setContributionStatus = (fid, eid, cid, status) => contrib(fid, eid, cid).update({ status, updatedAt: now() });
-  const updateMyContribution = (fid, eid, cid, { amount, status, note }) => contrib(fid, eid, cid).update({ amount, status, note: note || null, updatedAt: now() });
+  const updateMyContribution = (fid, eid, cid, { amount, status, note, item, origin }) => contrib(fid, eid, cid).update({ amount, status, note: note || null, item: item ?? null, origin, updatedAt: now() });
   async function deleteMyContribution(fid, eid, cid) {
     const batch = db.batch();
     batch.delete(contrib(fid, eid, cid));
@@ -363,14 +365,23 @@ const orga = (() => {
     const val = (d) => (d && d.exists ? { ...d.data(), updatedAt: toDate(d.data().updatedAt) } : null);
     return { budget: val(b), guests: val(g) };
   }
+  /** Argent seulement dans les montants ; les dons en nature sont comptés à part. */
   function budgetTotals(expenses, contributions) {
     const sum = (list) => list.reduce((s, x) => s + x.amount, 0);
-    const confirmed = contributions.filter((c) => c.status === "confirmed");
+    const money = contributions.filter((c) => c.kind !== "inkind");
+    const confirmed = money.filter((c) => c.status === "confirmed");
     return {
       spent: sum(expenses), paid: sum(expenses.filter((x) => x.status === "paid")),
-      confirmed: sum(confirmed), pending: sum(contributions.filter((c) => c.status !== "confirmed")),
+      confirmed: sum(confirmed), pending: sum(money.filter((c) => c.status !== "confirmed")),
       contributors: confirmed.length,
+      inkind: contributions.filter((c) => c.kind === "inkind" && c.status === "confirmed").length,
     };
+  }
+  /** Contributions confirmées (argent) par provenance, pour l'anneau du budget. */
+  function byOrigin(contributions) {
+    const out = {};
+    for (const c of contributions) if (c.kind !== "inkind" && c.status === "confirmed") out[c.origin ?? "OTHER"] = (out[c.origin ?? "OTHER"] ?? 0) + c.amount;
+    return out;
   }
   function guestTotals(guests) {
     const t = { households: guests.length, invited: 0, yes: 0, no: 0, pending: 0, attending: 0 };
@@ -428,7 +439,18 @@ const orga = (() => {
     if (current) await saveInvitation(fid, eid, event, current);
   }
 
+  // ─── Comités ───
+  async function listCommittees(fid, eid) {
+    const s = await ev(fid, eid).collection("committees").get();
+    return s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }
+  const createCommittee = (fid, eid, name, members) => ev(fid, eid).collection("committees").add({
+    name, memberUids: members.map((m) => m.uid), memberNames: members.map((m) => m.displayName), createdBy: uid(), createdAt: now(), updatedAt: now(),
+  });
+  const deleteCommittee = (fid, eid, id) => ev(fid, eid).collection("committees").doc(id).delete();
+
   return {
+    listCommittees, createCommittee, deleteCommittee, byOrigin,
     listTasks, getTask, createTask, createTasks, updateTask, setTaskStatus, deleteTask,
     listExpenses, getExpense, createExpense, updateExpense, deleteExpense,
     createMyContribution, recordContribution, listContributions, getIdentity, listMyContributions,
@@ -681,11 +703,60 @@ function card(...children) {
  * Éléments d'interface communs : icônes, avatars, en-têtes, barre de navigation.
  */
 
+/* Photos d'illustration : banque Unsplash (licence Unsplash : usage gratuit, y compris commercial).
+   Chargées depuis images.unsplash.com, recadrées à la taille d'affichage. Crédits : écran « Conditions ».
+   Si une photo ne charge pas, le dégradé violet prévu dessous reste affiché. */
+const PHOTOS = {
+  wedding: ["photo-1661332517932-2d441bfb2994", "Tope. A Asokere", "Couple en tenue traditionnelle"],
+  weddingHands: ["photo-1507650029083-5092f9b2b2e6", "Andrew Itaga", "Mains des mariés"],
+  celebration: ["photo-1784202388318-a2caaeffe4b7", "Amari Shutters", "Soirée de fête"],
+  reunion: ["photo-1628517290972-74a92219db50", "A n v e s h", "Famille réunie dehors"],
+  family: ["photo-1516013474378-d6498f0d1434", "Gift Habeshaw", "Famille à table"],
+  womenWax: ["photo-1542352526-48ef0a72c2f7", "Muhammad-Taha Ibrahim", "Femmes en tenues colorées"],
+  naming: ["photo-1763368161231-3d1e91e48d08", "Emmanuel Black", "Père et bébé en boubou"],
+  birthday: ["photo-1623244727304-54995b233b1c", "Gracious Adebayo", "Anniversaire"],
+  womenTrad: ["photo-1737649507334-92c9fa4beb7c", "Eyo Archibong", "Femmes en tenue de cérémonie"],
+  traditional: ["photo-1523689119443-df96632084a1", "Lee Pigott", "Tambours traditionnels"],
+  religious: ["photo-1705051194814-e01d4b396057", "Fahim Junaid", "Mosquée"],
+  communion: ["photo-1604072424771-7300bc5de457", "Danique Godwin", "Famille à l'église"],
+};
+/** Photos proposées en couverture selon le type (la première est celle par défaut). */
+const COVERS = {
+  WEDDING: ["wedding", "weddingHands", "celebration", "womenTrad"],
+  NAMING_CEREMONY: ["naming", "family", "womenWax"],
+  COMMUNION: ["communion", "family", "reunion"],
+  BIRTHDAY: ["birthday", "celebration", "family"],
+  RELIGIOUS_CEREMONY: ["religious", "womenWax", "reunion"],
+  FAMILY_REUNION: ["reunion", "family", "womenWax"],
+  TRADITIONAL_CEREMONY: ["traditional", "womenTrad", "celebration"],
+  CUSTOM: ["celebration", "reunion", "womenTrad", "family"],
+};
+function photoUrl(key, w = 800, hgt = 500) {
+  const p = PHOTOS[key];
+  return p ? `https://images.unsplash.com/${p[0]}?auto=format&fit=crop&crop=faces,entropy&w=${w}&h=${hgt}&q=70` : "";
+}
+function coverOf(e) { return e && e.cover && PHOTOS[e.cover] ? e.cover : (COVERS[e?.type] ?? COVERS.CUSTOM)[0]; }
+/** Image décorative (alt vide) ; disparaît proprement si elle ne charge pas. */
+function photo(key, w, hgt, cls = "") {
+  const img = h("img", { src: photoUrl(key, w, hgt), alt: "", class: `photo ${cls}`, loading: "lazy", decoding: "async", width: w, height: hgt });
+  img.addEventListener("error", () => img.remove());
+  return img;
+}
+/** Fond photo + voile violet, pour les bandeaux (événement, famille, lancement). */
+function photoBackground(el, key, w, hgt, veil = "linear-gradient(180deg, rgba(46,16,101,.25), rgba(30,15,69,.88))") {
+  el.style.backgroundImage = `${veil}, url("${photoUrl(key, w, hgt)}"), linear-gradient(135deg, #5b21b6, #1e0f45)`;
+  el.style.backgroundSize = "cover";
+  el.style.backgroundPosition = "center";
+  return el;
+}
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ICONS = {
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
   family: "M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c0-3.3 2.7-6 6-6s6 2.7 6 6zm12.5 0c0-2-.6-3.8-1.7-5.2.9-.5 2-.8 3.2-.8 3.3 0 6 2.7 6 6z",
   more: "M5 12a2 2 0 1 0 0-.01zM12 12a2 2 0 1 0 0-.01zM19 12a2 2 0 1 0 0-.01z",
+  tasks: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm4.6 12.6 7.7-7.7-1.4-1.4-6.3 6.3-2.9-2.9-1.4 1.4z",
+  budget: "M3 7a3 3 0 0 1 3-3h12v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3zm3-1a1 1 0 0 0 0 2h10V6zm11 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
 };
 
 function icon(name) {
@@ -693,6 +764,7 @@ function icon(name) {
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("fill-rule", "evenodd");
   const p = document.createElementNS(SVG_NS, "path");
   p.setAttribute("d", ICONS[name]);
   svg.append(p);
@@ -707,6 +779,8 @@ function tabbar(active) {
     h("a", { href: "#/", class: "brand-side" }, h("img", { src: "images/logo.svg", alt: "" }), "Bennoo"),
     link("#/", "home", "Accueil", "home"),
     link("#/familles", "family", "Famille", "family"),
+    link("#/taches", "tasks", "Tâches", "tasks"),
+    link("#/budget", "budget", "Budget", "budget"),
     link("#/plus", "more", "Plus", "more"),
   );
 }
@@ -778,28 +852,28 @@ function launchScreen() {
       h("h1", {}, "Bennoo"),
       h("p", { class: "tag" }, "Ensemble pour vos moments précieux"),
     ),
-    h("div", { class: "circle", "aria-hidden": "true" }, "👨‍👩‍👧‍👦"),
     h("div", { class: "actions" },
       h("a", { href: "#/decouvrir/0", class: "btn btn-primary btn-block" }, "Commencer"),
       h("a", { href: "#/connexion", class: "btn btn-light btn-block" }, "Se connecter"),
       FIREBASE_READY ? null : h("p", { class: "small" }, "Aperçu : la connexion sera activée dès que le projet Firebase sera relié."),
     ),
   );
+  photoBackground(node, "womenWax", 900, 1400, "linear-gradient(180deg, rgba(76,29,149,.82) 0%, rgba(46,16,101,.35) 45%, rgba(30,15,69,.92) 100%)");
   return { node, title: "Bienvenue" };
 }
 
 // ─── 2. Onboarding ────────────────────────────────────────────────────────
 const SLIDES = [
-  { art: "💍", title: "Organisez vos événements en famille", text: "Mariages, baptêmes, anniversaires et plus encore, en toute sérénité." },
-  { art: "📋", title: "Une organisation plus simple", text: "Répartissez les rôles, invitez vos proches et suivez la préparation ensemble." },
-  { art: "📸", title: "Des souvenirs pour toujours", text: "Gardez au même endroit les moments importants de votre famille." },
+  { art: "reunion", title: "Des événements qui nous rassemblent", text: "Organisez mariages, baptêmes, anniversaires et plus encore en famille." },
+  { art: "womenTrad", title: "Une organisation plus simple", text: "Répartissez les tâches, suivez le budget et avancez ensemble." },
+  { art: "wedding", title: "Des souvenirs pour toujours", text: "Gardez au même endroit les moments importants de votre famille." },
 ];
 function onboardingScreen(i) {
   const idx = Math.min(Math.max(i, 0), SLIDES.length - 1);
   const s = SLIDES[idx];
   const last = idx === SLIDES.length - 1;
   const node = h("main", { class: "onboard", id: "contenu" },
-    h("div", { class: "art", "aria-hidden": "true" }, s.art),
+    h("div", { class: "art", "aria-hidden": "true" }, photo(s.art, 900, 760)),
     h("h1", {}, s.title),
     h("p", {}, s.text),
     h("div", { class: "dots", "aria-label": `Écran ${idx + 1} sur ${SLIDES.length}` }, SLIDES.map((_, k) => h("span", { class: k === idx ? "on" : "" }))),
@@ -941,14 +1015,20 @@ function verifyScreen(user) {
 }
 
 // ─── 4. Accueil personnel ─────────────────────────────────────────────────
-function eventCard(e, familyName) {
-  return h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}`, class: "event-card" },
-    h("span", { class: "thumb", "aria-hidden": "true" }, EVENT_ICONS[e.type] ?? "✨"),
+function eventCard(e, familyName, progress = null) {
+  let bar = null;
+  if (progress !== null) {
+    bar = h("span", { class: "mini-progress", role: "img", "aria-label": `Organisation : ${progress} %` }, h("span", { class: "bar" }, h("span", {})), h("span", { class: "pct" }, `${progress}%`));
+    bar.querySelector(".bar span").style.width = `${progress}%`;
+  }
+  return h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}`, class: "event-card", dataset: { search: [e.title, e.city, EVENT_TYPES[e.type], familyName].filter(Boolean).join(" ").toLowerCase() } },
+    h("span", { class: "thumb", "aria-hidden": "true" }, EVENT_ICONS[e.type] ?? "✨", photo(coverOf(e), 160, 160)),
     h("span", { class: "grow" },
       h("span", { class: "title" }, e.title),
       h("span", { class: "sub" }, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · ")),
       h("span", {}, h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)), " ",
         h("span", { class: "chip chip-violet" }, EVENT_ROLES[e.myRole] ?? ""), familyName ? h("span", { class: "sub" }, ` · ${familyName}`) : null),
+      bar,
     ),
     h("span", { class: "chev", "aria-hidden": "true" }, "›"),
   );
@@ -973,38 +1053,6 @@ function createFamilyForm(displayName) {
     });
   });
   return form;
-}
-
-async function homeScreen() {
-  const [profile, families, events] = await Promise.all([data.getProfile(), data.listMyFamilies(), data.listMyEvents()]);
-  const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
-  const famName = Object.fromEntries(families.map((f) => [f.id, f.name]));
-  const upcoming = events.filter((e) => !e.startsAt || daysUntil(e.startsAt) >= 0);
-  const past = events.filter((e) => e.startsAt && daysUntil(e.startsAt) < 0).reverse();
-  const showFamily = families.length > 1;
-
-  const node = screen(
-    h("div", { class: "hello" },
-      avatar(name),
-      h("div", { class: "grow" }, h("h1", {}, `Bonjour ${firstName(name)} 👋`), h("p", { class: "muted" }, "Bon retour sur Bennoo !")),
-    ),
-    families.length === 0
-      ? h("section", { class: "card" },
-        h("h2", {}, "Créez votre famille"),
-        h("p", { class: "muted small" }, "C'est l'espace où vous organiserez vos événements avec vos proches. Vous avez reçu un lien d'invitation ? Ouvrez-le pour rejoindre la famille."),
-        h("div", { class: "form" }, createFamilyForm(name)))
-      : null,
-    h("section", {},
-      h("div", { class: "section-head" }, h("h2", {}, "Mes événements"),
-        families.length ? h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer") : null),
-      h("div", { style: null }, upcoming.length
-        ? upcoming.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null))
-        : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement à venir."),
-          h("span", {}, families.length ? "Créez-en un : vous en serez l'organisateur." : "Commencez par créer votre famille."))),
-    ),
-    past.length ? h("section", {}, h("h2", {}, "Événements passés"), h("div", {}, past.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null)))) : null,
-  );
-  return { node, title: "Accueil", nav: "home" };
 }
 
 // ─── 5. Familles et Family Hub ────────────────────────────────────────────
@@ -1034,11 +1082,12 @@ async function familyScreen(fid, tab = "membres") {
   const isAdmin = ["owner", "admin"].includes(family.myRole);
   const myUid = auth.currentUser.uid;
   const famEvents = events.filter((e) => e.familyId === fid);
-  const current = tab === "evenements" ? "evenements" : tab === "inviter" ? "inviter" : "membres";
+  const current = tab === "evenements" ? "evenements" : tab === "inviter" ? "inviter" : tab === "comites" ? "comites" : "membres";
 
   const tabs = h("div", { class: "tabs", role: "tablist" },
     h("a", { href: `#/famille/${enc(fid)}/membres`, role: "tab", "aria-selected": String(current === "membres") }, "Membres"),
     h("a", { href: `#/famille/${enc(fid)}/evenements`, role: "tab", "aria-selected": String(current === "evenements") }, "Événements"),
+    h("a", { href: `#/famille/${enc(fid)}/comites`, role: "tab", "aria-selected": String(current === "comites") }, "Comités"),
   );
 
   let body;
@@ -1046,6 +1095,8 @@ async function familyScreen(fid, tab = "membres") {
     body = h("div", {},
       famEvents.length ? famEvents.map((e) => eventCard(e)) : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement auquel vous participez."), h("span", {}, "Un événement n'est visible que de ses participants.")),
       h("a", { href: `#/nouvel-evenement/${enc(fid)}`, class: "btn btn-primary btn-block", style: null }, "+ Créer un événement"));
+  } else if (current === "comites") {
+    body = await familyCommittees(famEvents);
   } else if (current === "inviter") {
     body = isAdmin ? await invitePanel(fid, family.name) : h("div", { class: "card" }, h("p", {}, "Seul un administrateur de la famille peut créer un lien d'invitation."));
   } else {
@@ -1061,7 +1112,7 @@ async function familyScreen(fid, tab = "membres") {
 
   const node = screen(
     h("section", { class: "family-hero" },
-      h("div", { class: "band" }),
+      photoBackground(h("div", { class: "band" }), "reunion", 1000, 360, "linear-gradient(180deg, rgba(46,16,101,.1), rgba(46,16,101,.45))"),
       h("div", { class: "id" }, avatar(family.name),
         h("div", {}, h("h1", {}, family.name), h("p", { class: "muted small" }, `${members.length} membre${members.length > 1 ? "s" : ""} · ${famEvents.length} événement${famEvents.length > 1 ? "s" : ""}`)))),
     current === "inviter" ? header("Inviter un membre", `#/famille/${enc(fid)}/membres`) : tabs,
@@ -1192,7 +1243,7 @@ async function newEventScreen(presetFid) {
   }
   const state = {
     step: 0, type: "WEDDING", familyId: families.some((f) => f.id === presetFid) ? presetFid : families[0].id,
-    title: "", description: "", startsAt: "", venue: "", city: "", currency: "XOF", budget: "", guests: "", picks: {},
+    title: "", description: "", startsAt: "", venue: "", city: "", currency: "XOF", budget: "", guests: "", picks: {}, cover: null,
   };
   const backHref = presetFid ? `#/famille/${enc(presetFid)}/evenements` : "#/";
   const body = h("div", { class: "form" });
@@ -1207,11 +1258,12 @@ async function newEventScreen(presetFid) {
 
   function saveStep(form) {
     const v = values(form);
-    if (state.step === 0) state.type = v.type || state.type;
+    if (state.step === 0) { if (v.type && v.type !== state.type) state.cover = null; state.type = v.type || state.type; }
     if (state.step === 1) {
       state.title = v.title.replace(/\s+/g, " ").trim();
       state.description = v.description.trim();
       if (v.familyId) state.familyId = v.familyId;
+      if (v.cover && PHOTOS[v.cover]) state.cover = v.cover;
       if (!state.title) throw new Error("Le nom de l'événement est obligatoire.");
       if (state.title.length > 120) throw new Error("Le nom ne doit pas dépasser 120 caractères.");
     }
@@ -1247,12 +1299,14 @@ async function newEventScreen(presetFid) {
         return [h("h2", {}, "Informations de base"),
           families.length > 1 ? field("Famille", { name: "familyId", tag: "select", class: "input", options: families.map((f) => [f.id, f.name]) }) : null,
           field("Nom de l'événement", { name: "title", class: "input", required: true, maxlength: 120, value: state.title, placeholder: "Ex. Mariage de Fatou & Mamadou" }),
-          field("Description (facultatif)", { name: "description", tag: "textarea", class: "input", maxlength: 2000 })];
+          field("Description (facultatif)", { name: "description", tag: "textarea", class: "input", maxlength: 2000 }),
+          coverPicker(state.type, state.cover ?? COVERS[state.type][0])];
       case 2:
         return [h("h2", {}, "Lieu et date"),
           field("Date et heure", { name: "startsAt", type: "datetime-local", class: "input", value: state.startsAt }, "Facultatif : vous pourrez la fixer plus tard."),
           field("Lieu", { name: "venue", class: "input", maxlength: 200, value: state.venue, placeholder: "Ex. Salle des fêtes, domicile familial" }),
-          field("Ville", { name: "city", class: "input", maxlength: 120, value: state.city, placeholder: "Ex. Dakar, Sénégal" })];
+          field("Ville", { name: "city", class: "input", maxlength: 120, value: state.city, placeholder: "Ex. Dakar, Sénégal" }),
+          mapBlock(() => { const f = body.querySelector("form"); return [f?.elements.venue?.value, f?.elements.city?.value]; })];
       case 3:
         return [h("h2", {}, "Budget"),
           field("Devise", { name: "currency", tag: "select", class: "input", options: Object.entries(CURRENCIES) }),
@@ -1297,7 +1351,7 @@ async function newEventScreen(presetFid) {
             type: state.type, title: state.title, description: state.description,
             startsAt: state.startsAt ? new Date(state.startsAt) : null, venue: state.venue, city: state.city,
             currency: state.currency, budgetPlanned: parseAmount(state.budget, state.currency),
-            expectedGuests: state.guests === "" ? null : Number(state.guests),
+            expectedGuests: state.guests === "" ? null : Number(state.guests), cover: state.cover ?? COVERS[state.type][0],
           }, displayName);
           const failed = [];
           for (const [uid, role] of Object.entries(state.picks)) {
@@ -1377,6 +1431,7 @@ function editEventForm(fid, eid, e, base) {
     field("Budget prévu", { name: "budget", class: "input", inputmode: "decimal", value: amount }),
     field("Nombre d'invités prévu", { name: "guests", type: "number", class: "input", min: 0, max: 100000, value: e.expectedGuests ?? "" }),
     field("Description", { name: "description", tag: "textarea", class: "input", maxlength: 2000 }),
+    coverPicker(e.type, coverOf(e)),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, "Enregistrer les modifications"));
   form.elements.type.value = e.type;
   form.elements.currency.value = e.currency;
@@ -1394,6 +1449,7 @@ function editEventForm(fid, eid, e, base) {
         await data.updateEvent(fid, eid, {
           type: v.type, title, description: v.description.trim(), startsAt: v.startsAt ? new Date(v.startsAt) : null,
           venue: v.venue.trim(), city: v.city.trim(), currency: v.currency, budgetPlanned: parseAmount(v.budget, v.currency), expectedGuests: guests,
+          cover: PHOTOS[v.cover] ? v.cover : coverOf(e),
         });
         await orga.syncInvitation(fid, eid, { title, type: v.type, startsAt: v.startsAt ? new Date(v.startsAt) : null, venue: v.venue.trim(), city: v.city.trim() });
         toast("Événement mis à jour");
@@ -1418,6 +1474,11 @@ const EXPENSE_STATUS = { pending: "À payer", paid: "Payée" };
 const EXPENSE_CHIP = { pending: "chip-orange", paid: "chip-green" };
 const CONTRIB_STATUS = { promised: "Promise", declared: "Déclarée", confirmed: "Confirmée" };
 const CONTRIB_CHIP = { promised: "chip-gold", declared: "chip-blue", confirmed: "chip-green" };
+const CONTRIB_KIND = { money: "Argent", inkind: "En nature" };
+const ORIGINS = {
+  HOSTS: ["Les hôtes (mariés, parents…)", "#e11d48"], FAMILY: ["Famille", "#7c3aed"], FRIENDS: ["Amis et voisins", "#f59e0b"],
+  DIASPORA: ["Diaspora", "#0ea5e9"], OTHER: ["Autres", "#16a34a"],
+};
 const GUEST_RESPONSE = { pending: "Sans réponse", yes: "Vient", no: "Ne vient pas" };
 const GUEST_CHIP = { pending: "chip-violet", yes: "chip-green", no: "chip-red" };
 
@@ -1540,7 +1601,8 @@ async function eventOverview(ctx) {
       h("dt", {}, "Lieu"), h("dd", {}, [event.venue, event.city].filter(Boolean).join(", ") || "À préciser"),
       h("dt", {}, "Famille"), h("dd", {}, family.name),
       h("dt", {}, "Invités prévus"), h("dd", {}, event.expectedGuests ?? "—")),
-    event.description ? h("p", { class: "muted" }, event.description) : null),
+    event.description ? h("p", { class: "muted" }, event.description) : null,
+    event.venue || event.city ? mapBlock(() => [event.venue, event.city]) : null),
     h("p", { class: "muted small" }, "L'album photos arrivera dans une prochaine étape."),
   );
 }
@@ -1569,7 +1631,8 @@ async function tasksPanel(ctx, view) {
   const tasks = await orga.listTasks(fid, eid);
   const head = h("div", { class: "section-head" }, h("h2", {}, "Tâches"),
     isOrganizer ? h("a", { href: `${base}/taches/nouvelle`, class: "btn btn-primary btn-sm" }, "+ Nouvelle tâche") : null);
-  const switcher = subTabs([[`${base}/taches`, "Liste", "liste"], [`${base}/taches/calendrier`, "Calendrier", "calendrier"]], view === "calendrier" ? "calendrier" : "liste");
+  const switcher = subTabs([[`${base}/taches`, "Liste", "liste"], [`${base}/taches/calendrier`, "Calendrier", "calendrier"], [`${base}/taches/kanban`, "Kanban", "kanban"]],
+    ["calendrier", "kanban"].includes(view) ? view : "liste");
 
   if (tasks.length === 0) {
     const empty = h("div", { class: "card form" },
@@ -1587,6 +1650,7 @@ async function tasksPanel(ctx, view) {
   }
 
   if (view === "calendrier") return h("div", { class: "form" }, head, switcher, calendar(ctx, tasks));
+  if (view === "kanban") return h("div", { class: "form" }, head, switcher, kanban(ctx, tasks));
 
   const counts = { all: tasks.length, todo: 0, doing: 0, done: 0 };
   for (const t of tasks) counts[t.status] += 1;
@@ -1601,6 +1665,30 @@ async function tasksPanel(ctx, view) {
   draw();
   return h("div", { class: "form" }, head, switcher, listBox,
     h("p", { class: "muted small" }, isOrganizer ? "Cochez une tâche pour la terminer. Le responsable d'une tâche peut aussi changer son statut." : "Vous pouvez changer le statut des tâches dont vous êtes responsable."));
+}
+
+/** Vue Kanban (planche 4 « Planning ») : trois colonnes, déplacement par boutons (utilisable au clavier). */
+function kanban(ctx, tasks) {
+  const order = ["todo", "doing", "done"];
+  return h("div", { class: "kanban" }, order.map((st, i) => {
+    const list = tasks.filter((t) => t.status === st);
+    return h("section", { class: `kcol k-${st}`, "aria-label": TASK_STATUS[st] },
+      h("h3", {}, TASK_STATUS[st], " ", h("span", { class: "muted" }, `(${list.length})`)),
+      list.length ? list.map((t) => {
+        const move = (to, label) => {
+          const b = h("button", { type: "button", class: "btn btn-sm", "aria-label": `${label} : ${t.title}` }, label);
+          b.addEventListener("click", () => withBusy(b, async () => {
+            try { await orga.setTaskStatus(ctx.fid, ctx.eid, t.id, to); toast(`« ${t.title} » : ${TASK_STATUS[to].toLowerCase()}`); reload(); } catch (err) { toast(errMsg(err)); }
+          }));
+          return b;
+        };
+        const can = canChangeStatus(ctx, t);
+        return h("article", { class: "kcard" },
+          h("a", { href: `${ctx.base}/tache/${enc(t.id)}`, class: "title" }, t.title),
+          h("span", { class: "sub" }, [t.dueAt ? shortDate(t.dueAt) : null, t.assigneeName].filter(Boolean).join(" · ") || "Sans échéance"),
+          can ? h("div", { class: "kmove" }, i > 0 ? move(order[i - 1], "‹ " + TASK_STATUS[order[i - 1]]) : null, i < 2 ? move(order[i + 1], TASK_STATUS[order[i + 1]] + " ›") : null) : null);
+      }) : h("p", { class: "muted small" }, "Aucune tâche"));
+  }));
 }
 
 function calendar(ctx, tasks) {
@@ -1723,21 +1811,30 @@ async function taskDetail(ctx, tid, participants) {
 }
 
 // ─── Budget, dépenses et contributions (maquette 10, planches 3 et 4) ─────
-function budgetCard(event, totals, showDetail) {
+function budgetCard(event, totals, showDetail, origins = null) {
   const cur = event.currency;
   const budget = event.budgetPlanned;
   const toFinance = Math.max(0, budget - totals.confirmed);
-  const bar = h("div", { class: "bar", role: "img", "aria-label": `${pct(totals.confirmed, budget)} % du budget financé` }, h("span", {}));
-  bar.firstChild.style.width = `${pct(totals.confirmed, budget)}%`;
   const line = (label, value, cls = "") => h("div", { class: `money-line ${cls}` }, h("span", {}, label), h("strong", {}, formatAmount(value, cur)));
+  const share = (v) => (budget ? `${pct(v, budget)} %` : "");
+  const originLines = origins && Object.keys(origins).length
+    ? h("ul", { class: "origins" }, Object.entries(ORIGINS).filter(([k]) => origins[k]).map(([k, [label, color]]) => {
+      const dot = h("span", { class: "odot", "aria-hidden": "true" }); dot.style.background = color;
+      return h("li", {}, dot, h("span", { class: "grow" }, label), h("strong", {}, formatAmount(origins[k], cur)), h("span", { class: "muted" }, share(origins[k])));
+    }), budget ? h("li", {}, h("span", { class: "odot rest", "aria-hidden": "true" }), h("span", { class: "grow" }, "Reste à financer"), h("strong", {}, formatAmount(toFinance, cur)), h("span", { class: "muted" }, share(toFinance))) : null)
+    : null;
   return h("section", { class: "card form" },
-    h("div", {}, h("p", { class: "muted small" }, "Budget global"), h("p", { class: "big-amount" }, budget ? formatAmount(budget, cur) : "Non défini")),
-    budget ? h("div", {}, bar, h("p", { class: "muted small" }, `${pct(totals.confirmed, budget)} % financé par les contributions confirmées`)) : h("p", { class: "muted small" }, "L'organisateur peut fixer le budget dans « Modifier »."),
+    h("h2", {}, "Budget global"),
+    budget ? donut(pct(totals.confirmed, budget), formatAmount(totals.confirmed, cur), `/ ${formatAmount(budget, cur)}`)
+      : h("p", { class: "muted small" }, "Budget non défini : l'organisateur peut le fixer dans « Modifier »."),
+    budget ? h("p", { class: "muted small center" }, `${pct(totals.confirmed, budget)} % financé par les contributions confirmées`) : null,
+    originLines,
     line("Contributions confirmées", totals.confirmed, "ok"),
     line("Contributions en attente", totals.pending),
     showDetail ? line("Dépenses engagées", totals.spent) : null,
     showDetail ? line("Dont payées", totals.paid) : null,
-    budget ? line("Reste à financer", toFinance, toFinance > 0 ? "warn" : "ok") : null);
+    budget ? line("Reste à financer", toFinance, toFinance > 0 ? "warn" : "ok") : null,
+    totals.inkind ? h("p", { class: "muted small" }, `+ ${plural(totals.inkind, "don")} en nature confirmé${totals.inkind > 1 ? "s" : ""}`) : null);
 }
 
 async function budgetPanel(ctx, view) {
@@ -1781,7 +1878,7 @@ async function budgetPanel(ctx, view) {
       h("a", { href: `${base}/budget/depense`, class: "btn btn-primary btn-block" }, "+ Ajouter une dépense"));
   }
   return h("div", { class: "form" },
-    budgetCard(event, totals, true),
+    budgetCard(event, totals, true, orga.byOrigin(contributions)),
     h("p", { class: "muted small" }, isTreasurer
       ? "Vous êtes trésorier : vous confirmez les contributions et voyez le nom des contributeurs anonymes."
       : "Les simples membres ne voient que les totaux. Le nom d'un contributeur anonyme n'est visible que par lui et le trésorier."),
@@ -1799,6 +1896,7 @@ async function contributionsList(ctx, contributions) {
   }
   const listBox = h("div", {});
   let filter = "all";
+  let kind = "money";
   const row = (c) => {
     const who = c.anonymous ? (names[c.id] ? `${names[c.id]} (anonyme)` : "Contributeur anonyme") : c.displayName;
     const controls = [];
@@ -1815,17 +1913,24 @@ async function contributionsList(ctx, contributions) {
     }
     return h("li", { class: "item participant" }, c.anonymous && !names[c.id] ? h("span", { class: "avatar anon", "aria-hidden": "true" }, "?") : avatar(who),
       h("span", { class: "grow" }, h("span", { class: "title" }, who),
-        h("span", { class: "sub" }, [formatAmount(c.amount, event.currency), c.source === "treasurer" ? "enregistrée par le trésorier" : null, c.note].filter(Boolean).join(" · "))),
+        h("span", { class: "sub" }, [c.kind === "inkind" ? `${c.item}${c.amount ? ` (≈ ${formatAmount(c.amount, event.currency)})` : ""}` : formatAmount(c.amount, event.currency),
+          ORIGINS[c.origin]?.[0], c.source === "treasurer" ? "enregistrée par le trésorier" : null, c.note].filter(Boolean).join(" · "))),
       chip(CONTRIB_CHIP[c.status], CONTRIB_STATUS[c.status]),
       controls.length ? h("div", { class: "controls" }, controls) : null);
   };
-  const counts = { all: contributions.length, promised: 0, declared: 0, confirmed: 0 };
-  for (const c of contributions) counts[c.status] += 1;
   const draw = () => {
-    const shown = filter === "all" ? contributions : contributions.filter((c) => c.status === filter);
-    listBox.replaceChildren(
+    const ofKind = contributions.filter((c) => (c.kind ?? "money") === kind);
+    const counts = { all: ofKind.length, promised: 0, declared: 0, confirmed: 0 };
+    for (const c of ofKind) counts[c.status] += 1;
+    const shown = filter === "all" ? ofKind : ofKind.filter((c) => c.status === filter);
+    const kindTabs = h("div", { class: "tabs", role: "tablist" }, Object.entries(CONTRIB_KIND).map(([k, label]) => {
+      const b = h("button", { type: "button", role: "tab", "aria-selected": String(kind === k) }, label);
+      b.addEventListener("click", () => { kind = k; filter = "all"; draw(); });
+      return b;
+    }));
+    listBox.replaceChildren(kindTabs,
       filterChips([["all", `Toutes (${counts.all})`], ["promised", `Promises (${counts.promised})`], ["declared", `Déclarées (${counts.declared})`], ["confirmed", `Confirmées (${counts.confirmed})`]], filter, (k) => { filter = k; draw(); }),
-      shown.length ? h("ul", { class: "list card-flat" }, shown.map(row)) : h("div", { class: "card empty" }, contributions.length ? "Aucune contribution dans ce filtre." : "Aucune contribution pour l'instant."));
+      shown.length ? h("ul", { class: "list card-flat" }, shown.map(row)) : h("div", { class: "card empty" }, ofKind.length ? "Aucune contribution dans ce filtre." : kind === "inkind" ? "Aucun don en nature pour l'instant." : "Aucune contribution pour l'instant."));
   };
   draw();
   return h("div", { class: "form" }, listBox,
@@ -1844,7 +1949,7 @@ async function memberBudget(ctx) {
     h("section", {}, h("h2", {}, "Mes contributions"),
       mine.length ? h("ul", { class: "list card-flat" }, mine.map((c) => h("li", {},
         h("a", { href: `${base}/budget/contribution/${enc(c.id)}`, class: "item" },
-          h("span", { class: "grow" }, h("span", { class: "title" }, formatAmount(c.amount, event.currency)),
+          h("span", { class: "grow" }, h("span", { class: "title" }, c.kind === "inkind" ? `En nature : ${c.item}` : formatAmount(c.amount, event.currency)),
             h("span", { class: "sub" }, [c.anonymous ? "Anonyme" : "Nom visible", c.note].filter(Boolean).join(" · "))),
           chip(CONTRIB_CHIP[c.status], CONTRIB_STATUS[c.status])))))
         : h("div", { class: "card empty" }, "Vous n'avez pas encore déclaré de contribution.")),
@@ -1893,10 +1998,28 @@ function expenseForm(ctx, x) {
   return h("div", { class: "form" }, parts);
 }
 
+function kindSwitch() {
+  return h("fieldset", { class: "seg" }, h("legend", { class: "sr-only" }, "Type de contribution"),
+    Object.entries(CONTRIB_KIND).map(([k, label], i) => h("label", {}, h("input", { type: "radio", name: "kind", value: k, checked: i === 0 }), h("span", {}, label))));
+}
+/** Argent : montant obligatoire. En nature : description obligatoire, valeur estimée facultative. */
+function readContribution(kind, v, currency) {
+  if (kind === "inkind") {
+    const item = String(v.item ?? "").replace(/\s+/g, " ").trim();
+    if (!item) throw new Error("Décrivez ce que vous apportez.");
+    return { item, amount: parseAmount(v.amount, currency) };
+  }
+  return { item: null, amount: requiredAmount(v.amount, currency) };
+}
+
 function contributionForm(ctx, existing) {
   const { fid, eid, event, base, myName } = ctx;
+  const kind = existing?.kind ?? "money";
   const form = h("form", { class: "card form", novalidate: true },
-    field(`Montant (${CURRENCIES[event.currency]})`, { name: "amount", class: "input", inputmode: "decimal", required: true, value: amountInput(existing?.amount, event.currency) }),
+    existing ? h("p", {}, chip("chip-violet", CONTRIB_KIND[kind])) : kindSwitch(),
+    field("Ce que vous apportez", { name: "item", class: "input", maxlength: 120, value: existing?.item ?? "", placeholder: "Ex. 2 sacs de riz de 50 kg, location des chaises" }),
+    field(`Montant (${CURRENCIES[event.currency]})`, { name: "amount", class: "input", inputmode: "decimal", value: amountInput(existing?.amount, event.currency) }),
+    field("Provenance", { name: "origin", tag: "select", class: "input", options: Object.entries(ORIGINS).map(([k, [l]]) => [k, l]) }, "Sert à la répartition du budget (anneau)."),
     field("Où en êtes-vous ?", { name: "status", tag: "select", class: "input", options: [["promised", "Promise : je compte donner"], ["declared", "Déclarée : j'ai déjà donné"]] }),
     field("Précision (facultatif)", { name: "note", class: "input", maxlength: 200, value: existing?.note ?? "", placeholder: "Ex. Wave le 12/01, remis à Awa" }),
     existing ? h("p", { class: "muted small" }, existing.anonymous ? "Contribution anonyme : seul le trésorier voit votre nom." : "Votre nom est visible de l'organisateur et du trésorier.")
@@ -1904,15 +2027,24 @@ function contributionForm(ctx, existing) {
         h("span", {}, h("strong", {}, "Contribuer anonymement"), h("br"), h("span", { class: "muted small" }, "Votre nom ne sera visible que par vous et le trésorier qui confirme. Les autres verront « Contributeur anonyme »."))),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, existing ? "Enregistrer" : "Déclarer ma contribution"));
   if (existing) form.elements.status.value = existing.status;
+  form.elements.origin.value = existing?.origin ?? "FAMILY";
+  const syncKind = () => {
+    const k = existing ? kind : form.elements.kind.value;
+    form.elements.item.closest(".field").style.display = k === "inkind" ? "" : "none";
+    form.elements.amount.closest(".field").querySelector("label").textContent = k === "inkind" ? `Valeur estimée (${CURRENCIES[event.currency]}, facultatif)` : `Montant (${CURRENCIES[event.currency]})`;
+  };
+  form.addEventListener("change", syncKind);
+  syncKind();
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     showFormError(form, null);
     const v = values(form);
     await withBusy(form.querySelector("button[type=submit]"), async () => {
       try {
-        const amount = requiredAmount(v.amount, event.currency);
-        if (existing) await orga.updateMyContribution(fid, eid, existing.id, { amount, status: v.status, note: v.note.trim() });
-        else await orga.createMyContribution(fid, eid, { amount, status: v.status, anonymous: Boolean(v.anonymous), note: v.note.trim() }, myName);
+        const k = existing ? kind : v.kind;
+        const { amount, item } = readContribution(k, v, event.currency);
+        if (existing) await orga.updateMyContribution(fid, eid, existing.id, { amount, item, status: v.status, note: v.note.trim(), origin: v.origin });
+        else await orga.createMyContribution(fid, eid, { amount, kind: k, item, origin: v.origin, status: v.status, anonymous: Boolean(v.anonymous), note: v.note.trim() }, myName);
         toast("Contribution enregistrée");
         location.hash = `${base}/budget`;
       } catch (err) { showFormError(form, errMsg(err)); }
@@ -1920,7 +2052,7 @@ function contributionForm(ctx, existing) {
   });
   const parts = [subHeader(existing ? "Ma contribution" : "Ajouter ma contribution", `${base}/budget`)];
   if (existing?.status === "confirmed") {
-    parts.push(h("section", { class: "card form" }, h("p", { class: "big-amount" }, formatAmount(existing.amount, event.currency)), chip("chip-green", "Confirmée par le trésorier"),
+    parts.push(h("section", { class: "card form" }, h("p", { class: "big-amount" }, existing.kind === "inkind" ? existing.item : formatAmount(existing.amount, event.currency)), chip("chip-green", "Confirmée par le trésorier"),
       h("p", { class: "muted small" }, "Une contribution confirmée ne peut plus être modifiée. Contactez le trésorier en cas d'erreur.")));
   } else {
     parts.push(form);
@@ -1940,7 +2072,10 @@ function receivedGiftForm(ctx) {
   const { fid, eid, event, base } = ctx;
   const form = h("form", { class: "card form", novalidate: true },
     field("Nom du contributeur", { name: "name", class: "input", required: true, maxlength: 80, placeholder: "Ex. Tonton Ali, Famille Italie" }),
-    field(`Montant (${CURRENCIES[event.currency]})`, { name: "amount", class: "input", inputmode: "decimal", required: true }),
+    kindSwitch(),
+    field("Ce qui a été apporté", { name: "item", class: "input", maxlength: 120, placeholder: "Ex. 2 sacs de riz" }),
+    field(`Montant ou valeur estimée (${CURRENCIES[event.currency]})`, { name: "amount", class: "input", inputmode: "decimal" }),
+    field("Provenance", { name: "origin", tag: "select", class: "input", options: Object.entries(ORIGINS).map(([k, [l]]) => [k, l]) }),
     field("Statut", { name: "status", tag: "select", class: "input", options: [["confirmed", "Confirmée : reçue"], ["promised", "Promise"]] }),
     field("Précision (facultatif)", { name: "note", class: "input", maxlength: 200 }),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, "Enregistrer le don"));
@@ -1950,12 +2085,17 @@ function receivedGiftForm(ctx) {
     const v = values(form);
     await withBusy(form.querySelector("button"), async () => {
       try {
-        await orga.recordContribution(fid, eid, { displayName: cleanName(v.name), amount: requiredAmount(v.amount, event.currency), status: v.status, note: v.note.trim() });
+        const { amount, item } = readContribution(v.kind, v, event.currency);
+        await orga.recordContribution(fid, eid, { displayName: cleanName(v.name), amount, item, kind: v.kind, origin: v.origin, status: v.status, note: v.note.trim() });
         toast("Don enregistré");
         location.hash = `${base}/budget/contributions`;
       } catch (err) { showFormError(form, errMsg(err)); }
     });
   });
+  form.elements.origin.value = "FAMILY";
+  const sync = () => { form.elements.item.closest(".field").style.display = form.elements.kind.value === "inkind" ? "" : "none"; };
+  form.addEventListener("change", sync);
+  sync();
   return h("div", { class: "form" }, subHeader("Don reçu d'un proche", `${base}/budget/contributions`),
     h("p", { class: "muted small" }, "Pour un proche qui n'a pas de compte Bennoo : le trésorier enregistre son don."), form);
 }
@@ -1970,7 +2110,7 @@ function rsvpMessage(event, household, url) {
 
 function invitationCard(inv, guest) {
   const date = inv.startsAt;
-  return h("section", { class: "invitation" },
+  return h("section", { class: "invitation" }, h("span", { class: "orn orn-tl", "aria-hidden": "true" }), h("span", { class: "orn orn-br", "aria-hidden": "true" }),
     h("p", { class: "inv-hosts" }, inv.hosts || inv.title),
     h("p", { class: "inv-lead" }, inv.hosts ? "ont le plaisir de vous inviter" : "Vous êtes invités"),
     inv.hosts ? h("p", { class: "inv-title" }, inv.title) : null,
@@ -2056,7 +2196,8 @@ async function guestsPanel(ctx, view) {
       h("span", { class: "grow" }, h("span", { class: "title" }, g.household),
         h("span", { class: "sub" }, [plural(g.seats, "place"), g.phone, g.message ? `« ${g.message} »` : null].filter(Boolean).join(" · "))),
       chip(GUEST_CHIP[g.response], answer),
-      h("div", { class: "controls" }, h("a", { href: wa, target: "_blank", rel: "noopener", class: "btn btn-sm btn-whatsapp" }, "WhatsApp"), copy, del));
+      h("div", { class: "controls" }, h("a", { href: `${base}/invites/partager/${g.token}`, class: "btn btn-sm btn-primary" }, "Partager"),
+        h("a", { href: wa, target: "_blank", rel: "noopener", class: "btn btn-sm btn-whatsapp" }, "WhatsApp"), copy, del));
   };
 
   return h("div", { class: "form" }, tabs,
@@ -2067,7 +2208,7 @@ async function guestsPanel(ctx, view) {
       h("div", { class: "kpi" }, h("span", { class: "v" }, String(totals.pending)), h("span", { class: "l" }, "sans réponse"))),
     guests.length ? h("ul", { class: "list card-flat" }, guests.map(row)) : h("div", { class: "card empty" }, "Aucun invité pour l'instant."),
     form,
-    h("p", { class: "muted small" }, "QR code et rappels automatiques : prévus plus tard."));
+    h("p", { class: "muted small" }, "« Partager » affiche le QR code et le lien du foyer. Rappels automatiques : prévus plus tard."));
 }
 
 /** Page publique de réponse (RSVP) : ouverte depuis le lien personnel, sans compte. */
@@ -2132,7 +2273,7 @@ async function eventScreen(fid, eid, tab, sub, extra) {
       .filter(Boolean).map(([href, label, key]) => h("a", { href, "aria-current": active === key ? "page" : null, "aria-selected": String(active === key) }, label)));
 
   let body;
-  if (tab === "participants") body = await participantsPanel(fid, eid, participants, isOrganizer, myUid);
+  if (tab === "participants") body = h("div", { class: "form" }, await participantsPanel(fid, eid, participants, isOrganizer, myUid), await committeesSection(ctx));
   else if (tab === "modifier" && isOrganizer) body = h("div", { class: "form" }, subHeader("Modifier l'événement", base), editEventForm(fid, eid, event, base));
   else if (tab === "taches" && sub === "nouvelle" && isOrganizer) body = h("div", { class: "form" }, subHeader("Nouvelle tâche", `${base}/taches`), taskForm(ctx, null, participants));
   else if (tab === "taches") body = await tasksPanel(ctx, sub);
@@ -2144,19 +2285,319 @@ async function eventScreen(fid, eid, tab, sub, extra) {
     body = mine ? contributionForm(ctx, mine) : h("div", { class: "card" }, "Contribution introuvable.");
   } else if (tab === "budget" && sub === "don-recu" && ctx.isTreasurer) body = receivedGiftForm(ctx);
   else if (tab === "budget") body = await budgetPanel(ctx, sub);
+  else if (tab === "invites" && sub === "partager" && extra && isOrganizer) body = await shareGuestPanel(ctx, extra);
   else if (tab === "invites") body = await guestsPanel(ctx, sub);
   else body = await eventOverview(ctx);
 
   const node = screen(
     h("a", { href: `#/famille/${enc(fid)}/evenements`, class: "back", "aria-label": `Retour à ${family.name}` }, "‹"),
-    h("section", { class: "event-hero" },
+    photoBackground(h("section", { class: "event-hero" },
       h("span", { class: "type" }, EVENT_ICONS[event.type], " ", EVENT_TYPES[event.type]), " ",
       h("span", { class: "type" }, `Votre rôle : ${EVENT_ROLES[event.myRole]}`),
       h("h1", {}, event.title),
-      h("p", { class: "sub" }, [event.startsAt ? formatDate(event.startsAt) : "Date à fixer", event.city].filter(Boolean).join(" · "))),
+      h("p", { class: "sub" }, [event.startsAt ? formatDate(event.startsAt) : "Date à fixer", event.city].filter(Boolean).join(" · "))), coverOf(event), 1200, 520),
     tabs, body,
   );
   return { node, title: event.title, nav: "home" };
+}
+
+// ─── Écarts avec les maquettes comblés le 30/10/2026 ──────────────────────
+/** Choix de la photo de couverture (maquette 6, « Photo de couverture »). */
+function coverPicker(type, current) {
+  const keys = [...new Set([...(COVERS[type] ?? COVERS.CUSTOM), current].filter((k) => PHOTOS[k]))];
+  return h("fieldset", { class: "field" },
+    h("legend", { class: "label" }, "Photo de couverture"),
+    h("div", { class: "cover-grid" }, keys.map((k) => h("label", {},
+      h("input", { type: "radio", name: "cover", value: k, checked: k === current }),
+      h("span", { class: "cover-tile" }, photo(k, 320, 200), h("span", { class: "sr-only" }, PHOTOS[k][2]))))),
+    h("p", { class: "help" }, "Photos d'illustration libres de droits. L'envoi de vos propres photos viendra avec l'album."));
+}
+
+/** Carte du lieu (maquette 6 « Lieu et date ») : chargée seulement au clic, pour ne rien envoyer à Google sans action. */
+function mapBlock(getPlace) {
+  const box = h("div", { class: "map-box" });
+  const show = h("button", { type: "button", class: "btn btn-block" }, "📍 Afficher la carte du lieu");
+  show.addEventListener("click", () => {
+    const [venue, city] = getPlace();
+    const q = [venue, city].map((x) => String(x || "").trim()).filter(Boolean).join(", ");
+    if (!q) { toast("Indiquez d'abord un lieu ou une ville."); return; }
+    box.replaceChildren(
+      h("iframe", { src: `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`, title: `Carte : ${q}`, loading: "lazy", referrerpolicy: "no-referrer-when-downgrade" }),
+      h("a", { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, target: "_blank", rel: "noopener", class: "small" }, "Ouvrir dans Google Maps"));
+  });
+  box.append(show, h("p", { class: "help" }, "La carte est fournie par Google Maps et ne se charge que si vous cliquez."));
+  return box;
+}
+
+function donut(percent, big, small) {
+  const el = h("div", { class: "donut", role: "img", "aria-label": `${percent} %` },
+    h("div", { class: "donut-in" }, h("strong", {}, big), small ? h("span", {}, small) : null, h("b", {}, `${percent}%`)));
+  el.style.setProperty("--p", percent);
+  return el;
+}
+
+/** Statistiques d'un événement pour l'accueil, « Mes tâches » et « Budget ». */
+async function eventStats(e) {
+  const tasks = await orga.listTasks(e.familyId, e.id).catch(() => []);
+  const summary = await orga.getSummary(e.familyId, e.id).catch(() => ({ budget: null, guests: null }));
+  const done = tasks.filter((t) => t.status === "done").length;
+  return { e, tasks, summary, done, left: tasks.length - done, progress: tasks.length ? Math.round((done / tasks.length) * 100) : null };
+}
+
+const relTime = (d) => {
+  if (!d) return "";
+  const min = Math.round((Date.now() - d.getTime()) / 60000);
+  if (min < 1) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  if (min < 1440) return `il y a ${Math.round(min / 60)} h`;
+  const days = Math.round(min / 1440);
+  return days === 1 ? "hier" : days < 7 ? `il y a ${days} jours` : shortDate(d);
+};
+
+/** Activité récente (maquette 14) : tirée des vraies données que la personne a le droit de voir. */
+async function recentActivity(stats) {
+  const items = [];
+  await Promise.all(stats.map(async ({ e, tasks }) => {
+    const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
+    for (const t of tasks) {
+      const when = t.updatedAt?.toDate?.();
+      if (t.status === "done" && when) items.push({ when, icon: "✅", text: `Tâche terminée : ${t.title}`, sub: e.title, href: `${base}/tache/${enc(t.id)}` });
+    }
+    if (e.myRole === "organizer") {
+      const guests = await orga.listGuests(e.familyId, e.id).catch(() => []);
+      for (const g of guests) if (g.respondedAt) items.push({ when: g.respondedAt, icon: g.response === "yes" ? "💌" : "✉️", text: g.response === "yes" ? `${g.household} vient (${g.attending})` : `${g.household} ne viendra pas`, sub: e.title, href: `${base}/invites` });
+    }
+    if (["organizer", "treasurer"].includes(e.myRole)) {
+      const list = await orga.listContributions(e.familyId, e.id).catch(() => []);
+      for (const c of list) if (c.createdAt) items.push({ when: c.createdAt, icon: "💰", text: `Contribution ${CONTRIB_STATUS[c.status].toLowerCase()} : ${c.kind === "inkind" ? c.item : formatAmount(c.amount, e.currency)}`, sub: `${c.anonymous ? "Anonyme" : c.displayName} · ${e.title}`, href: `${base}/budget/contributions` });
+    }
+  }));
+  return items.sort((a, b) => b.when - a.when).slice(0, 6);
+}
+
+async function homeScreen() {
+  const [profile, families, events] = await Promise.all([data.getProfile(), data.listMyFamilies(), data.listMyEvents()]);
+  const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
+  const famName = Object.fromEntries(families.map((f) => [f.id, f.name]));
+  const upcoming = events.filter((e) => !e.startsAt || daysUntil(e.startsAt) >= 0);
+  const past = events.filter((e) => e.startsAt && daysUntil(e.startsAt) < 0).reverse();
+  const showFamily = families.length > 1;
+  const stats = await Promise.all(events.map(eventStats));
+  const byId = Object.fromEntries(stats.map((x) => [x.e.id, x]));
+  const activity = await recentActivity(stats);
+  const next = upcoming[0] ? byId[upcoming[0].id] : null;
+
+  const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? null));
+  const listBox = h("div", {}, upcoming.length ? cards(upcoming)
+    : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement à venir."), h("span", {}, families.length ? "Créez-en un : vous en serez l'organisateur." : "Commencez par créer votre famille.")));
+  const pastBox = past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null;
+
+  const search = events.length ? h("input", { type: "search", class: "input search", placeholder: "Rechercher un événement…", "aria-label": "Rechercher un événement" }) : null;
+  search?.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    for (const c of document.querySelectorAll(".event-card")) c.hidden = q !== "" && !c.dataset.search.includes(q);
+  });
+
+  let spotlight = null;
+  if (next) {
+    const { e, summary, left, progress } = next;
+    const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
+    const head = photoBackground(h("a", { href: base, class: "spot-head" },
+      h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)),
+      h("strong", {}, e.title), h("span", {}, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · "))), coverOf(e), 900, 400);
+    const bar = h("div", { class: "bar" }, h("span", {}));
+    bar.firstChild.style.width = `${progress ?? 0}%`;
+    const kpi = (v, l) => h("div", { class: "kpi" }, h("span", { class: "v sm" }, v), h("span", { class: "l" }, l));
+    const nextTasks = next.tasks.filter((t) => t.status !== "done").slice(0, 3);
+    spotlight = h("section", { class: "card spotlight" }, head,
+      h("div", { class: "form" },
+        h("div", {}, bar, h("p", { class: "muted small" }, progress === null ? "Aucune tâche pour l'instant" : `${progress} % de l'organisation terminée`)),
+        h("div", { class: "kpi-row four" },
+          kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
+          kpi(String(left), "Tâches restantes"),
+          kpi(e.budgetPlanned ? formatAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
+          kpi(summary.budget ? formatAmount(summary.budget.confirmed, e.currency) : "—", "Contributions")),
+        nextTasks.length ? h("div", {}, h("h3", {}, "Prochaines tâches"),
+          h("ul", { class: "list" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null));
+  }
+
+  const aside = h("aside", { class: "card activity", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"),
+    activity.length ? h("ul", { class: "list" }, activity.map((a) => h("li", {}, h("a", { href: a.href, class: "item" },
+      h("span", { class: "act-ico", "aria-hidden": "true" }, a.icon),
+      h("span", { class: "grow" }, h("span", { class: "title wrap" }, a.text), h("span", { class: "sub" }, `${a.sub} · ${relTime(a.when)}`))))))
+      : h("p", { class: "muted small" }, "Rien pour l'instant : les tâches terminées, réponses d'invités et contributions apparaîtront ici."));
+
+  const node = screen(
+    h("div", { class: "hello" },
+      avatar(name),
+      h("div", { class: "grow" }, h("h1", {}, `Bonjour ${firstName(name)} 👋`), h("p", { class: "muted" }, "Ravi de vous revoir !"))),
+    search,
+    families.length === 0
+      ? h("section", { class: "card" },
+        h("h2", {}, "Créez votre famille"),
+        h("p", { class: "muted small" }, "C'est l'espace où vous organiserez vos événements avec vos proches. Vous avez reçu un lien d'invitation ? Ouvrez-le pour rejoindre la famille."),
+        h("div", { class: "form" }, createFamilyForm(name)))
+      : null,
+    h("div", { class: "home-grid" },
+      h("div", { class: "home-main" },
+        spotlight,
+        h("section", {},
+          h("div", { class: "section-head" }, h("h2", {}, "Mes événements"),
+            families.length ? h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer") : null),
+          listBox),
+        pastBox),
+      events.length ? aside : null),
+  );
+  return { node, title: "Accueil", nav: "home" };
+}
+
+// ─── Rubrique « Tâches » de la barre (toutes mes tâches) ─────────────────
+async function myTasksScreen() {
+  const events = (await data.listMyEvents()).filter((e) => !e.startsAt || daysUntil(e.startsAt) >= -1);
+  const stats = await Promise.all(events.map(eventStats));
+  const me = auth.currentUser.uid;
+  const box = h("div", { class: "form" });
+  let mode = "mine";
+  const draw = () => {
+    const sections = stats.map(({ e, tasks }) => {
+      const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
+      const ctx = { fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: me };
+      const shown = tasks.filter((t) => t.status !== "done" && (mode === "all" || t.assigneeUid === me));
+      if (!shown.length) return null;
+      return h("section", {}, h("div", { class: "section-head" }, h("h2", {}, e.title), h("a", { href: `${base}/taches`, class: "small" }, "Ouvrir")),
+        h("ul", { class: "list card-flat" }, shown.map((t) => taskItem(ctx, t))));
+    }).filter(Boolean);
+    box.replaceChildren(
+      filterChips([["mine", "Assignées à moi"], ["all", "Toutes les tâches à faire"]], mode, (k) => { mode = k; draw(); }),
+      sections.length ? sections : h("div", { class: "card empty" }, h("strong", {}, mode === "mine" ? "Aucune tâche ne vous est assignée." : "Aucune tâche à faire."),
+        h("span", {}, events.length ? "Les tâches se créent dans chaque événement (onglet Tâches)." : "Créez ou rejoignez un événement pour commencer.")));
+  };
+  draw();
+  return { node: screen(header("Mes tâches"), box), title: "Mes tâches", nav: "tasks" };
+}
+
+// ─── Rubrique « Budget » de la barre (budget de chaque événement) ────────
+async function myBudgetScreen() {
+  const events = await data.listMyEvents();
+  const stats = await Promise.all(events.map(eventStats));
+  const cards = stats.map(({ e, summary }) => {
+    const b = summary.budget;
+    const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
+    const p = b && e.budgetPlanned ? pct(b.confirmed, e.budgetPlanned) : 0;
+    return h("a", { href: `${base}/budget`, class: "card budget-row" },
+      donut(p, b ? formatAmount(b.confirmed, e.currency) : "—", e.budgetPlanned ? `/ ${formatAmount(e.budgetPlanned, e.currency)}` : "budget à fixer"),
+      h("span", { class: "grow" }, h("strong", {}, e.title), h("span", { class: "sub" }, [e.startsAt ? shortDate(e.startsAt) : "Date à fixer", EVENT_ROLES[e.myRole]].join(" · ")),
+        h("span", { class: "sub" }, b ? `Reste à financer : ${formatAmount(Math.max(0, e.budgetPlanned - b.confirmed), e.currency)}` : "Totaux pas encore calculés (l'organisateur ou le trésorier doit ouvrir le budget)")),
+      h("span", { class: "chev", "aria-hidden": "true" }, "›"));
+  });
+  return {
+    node: screen(header("Budget"), cards.length ? h("div", { class: "form" }, cards, h("p", { class: "muted small" }, "Contributions confirmées par rapport au budget prévu de chaque événement."))
+      : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement."), h("span", {}, "Le budget se gère dans chaque événement."))),
+    title: "Budget", nav: "budget",
+  };
+}
+
+// ─── Comités (planche 2, écran 4) ────────────────────────────────────────
+async function committeesSection(ctx) {
+  const { fid, eid, isOrganizer, participants } = ctx;
+  const list = await orga.listCommittees(fid, eid);
+  const rows = list.map((c) => {
+    let del = null;
+    if (isOrganizer) {
+      del = h("button", { type: "button", class: "btn btn-sm" }, "Supprimer");
+      del.addEventListener("click", () => withBusy(del, async () => {
+        if (!confirm(`Supprimer le comité « ${c.name} » ?`)) return;
+        try { await orga.deleteCommittee(fid, eid, c.id); toast("Comité supprimé"); reload(); } catch (err) { toast(errMsg(err)); }
+      }));
+    }
+    return h("li", { class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, "👥"),
+      h("span", { class: "grow" }, h("span", { class: "title" }, c.name), h("span", { class: "sub" }, `${plural(c.memberNames.length, "membre")}${c.memberNames.length ? ` : ${c.memberNames.join(", ")}` : ""}`)), del);
+  });
+  let form = null;
+  if (isOrganizer) {
+    form = h("form", { class: "card form", novalidate: true }, h("h3", {}, "Créer un comité"),
+      field("Nom du comité", { name: "name", class: "input", required: true, maxlength: 80, placeholder: "Ex. Comité accueil" }),
+      h("fieldset", { class: "form" }, h("legend", { class: "label" }, "Membres du comité"),
+        participants.map((p) => h("label", { class: "check" }, h("input", { type: "checkbox", name: "m", value: p.uid }), h("span", {}, p.displayName)))),
+      h("button", { type: "submit", class: "btn btn-primary btn-block" }, "Créer le comité"));
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showFormError(form, null);
+      await withBusy(form.querySelector("button[type=submit]"), async () => {
+        try {
+          const name = cleanName(form.elements.name.value);
+          const uids = [...form.querySelectorAll("input[name=m]:checked")].map((i) => i.value);
+          const members = participants.filter((p) => uids.includes(p.uid));
+          await orga.createCommittee(fid, eid, name, members);
+          toast("Comité créé"); reload();
+        } catch (err) { showFormError(form, errMsg(err)); }
+      });
+    });
+  }
+  return h("section", { class: "form" }, h("h2", {}, "Comités de l'événement"),
+    rows.length ? h("ul", { class: "list card-flat" }, rows) : h("p", { class: "muted small" }, "Aucun comité. Un comité regroupe quelques participants autour d'une mission (accueil, décoration, restauration…)."),
+    form);
+}
+
+async function familyCommittees(famEvents) {
+  const blocks = await Promise.all(famEvents.map(async (e) => {
+    const list = await orga.listCommittees(e.familyId, e.id).catch(() => []);
+    if (!list.length) return null;
+    return h("section", {}, h("h2", {}, e.title), h("ul", { class: "list card-flat" }, list.map((c) => h("li", {},
+      h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}/participants`, class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, "👥"),
+        h("span", { class: "grow" }, h("span", { class: "title" }, c.name), h("span", { class: "sub" }, plural(c.memberNames.length, "membre"))),
+        h("span", { class: "chev", "aria-hidden": "true" }, "›"))))));
+  }));
+  const shown = blocks.filter(Boolean);
+  return h("div", { class: "form" }, shown.length ? shown : h("div", { class: "card empty" }, h("strong", {}, "Aucun comité."),
+    h("span", {}, "Les comités se créent dans l'onglet Participants d'un événement.")));
+}
+
+// ─── Partager l'invitation d'un foyer (maquette 11, « Partager l'invitation ») ──
+let qrLib = null;
+function loadQrLib() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  qrLib ??= new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+    sc.onload = () => resolve(window.qrcode);
+    sc.onerror = () => { qrLib = null; reject(new Error("QR code indisponible (pas de connexion ?)")); };
+    document.head.append(sc);
+  });
+  return qrLib;
+}
+
+async function shareGuestPanel(ctx, token) {
+  const { fid, eid, event, base } = ctx;
+  const g = await orga.getGuest(fid, eid, token);
+  if (!g) return h("div", { class: "card" }, "Cet invité n'existe plus.");
+  const guests = await orga.listGuests(fid, eid);
+  const answered = guests.filter((x) => x.response !== "pending").length;
+  const url = rsvpUrl(fid, eid, token);
+  const msg = rsvpMessage(event, g.household, url);
+  const qrBox = h("div", { class: "qr", role: "img", "aria-label": `QR code de l'invitation de ${g.household}` }, loading("QR code…"));
+  loadQrLib().then((qrcode) => {
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    qrBox.replaceChildren(h("img", { src: qr.createDataURL(6, 8), alt: "", width: 220, height: 220 }));
+  }).catch((err) => qrBox.replaceChildren(h("p", { class: "muted small" }, err.message)));
+  const copy = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Copier");
+  copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(url); toast("Lien copié"); } catch { prompt("Copiez ce lien :", url); } });
+  const share = (href, ico, label) => h("a", { href, class: "share-btn", target: href.startsWith("http") ? "_blank" : null, rel: "noopener" }, h("span", { "aria-hidden": "true" }, ico), label);
+  const more = navigator.share ? h("button", { type: "button", class: "share-btn" }, h("span", { "aria-hidden": "true" }, "⋯"), "Plus") : null;
+  more?.addEventListener("click", () => navigator.share({ title: event.title, text: msg, url }).catch(() => {}));
+  return h("div", { class: "form" },
+    subHeader(`Partager l'invitation · ${g.household}`, `${base}/invites`),
+    h("section", { class: "card form center" }, qrBox,
+      h("div", { class: "copy-row" }, h("input", { class: "input", value: url, readonly: true, "aria-label": "Lien personnel" }), copy)),
+    h("section", { class: "card" }, h("h3", {}, "Partager sur"),
+      h("div", { class: "share-row" },
+        share(g.phone ? `https://wa.me/${g.phone.replace("+", "")}?text=${encodeURIComponent(msg)}` : whatsappShareUrl(msg), "🟢", "WhatsApp"),
+        share(`mailto:?subject=${encodeURIComponent(`Invitation : ${event.title}`)}&body=${encodeURIComponent(msg)}`, "✉️", "E-mail"),
+        share(`sms:${g.phone ?? ""}?&body=${encodeURIComponent(msg)}`, "💬", "SMS"),
+        more)),
+    h("a", { href: `${base}/invites`, class: "btn btn-primary btn-block" }, `Voir les réponses (${answered})`));
 }
 
 // ─── 13. Paramètres et profil ─────────────────────────────────────────────
@@ -2215,6 +2656,10 @@ function termsScreen() {
       p("Un événement n'est visible que de ses participants, même au sein de la famille. Votre profil (téléphone compris) n'est visible que par vous. Les membres d'une famille voient le nom et le rôle des autres membres."),
       h("h2", {}, "Vos données"),
       p("Les données sont hébergées par Google Firebase, dans une région européenne. Vous pouvez modifier votre profil à tout moment et quitter une famille. Pour supprimer votre compte, contactez l'administrateur de Bennoo."),
+      h("h2", {}, "Services extérieurs"),
+      p("Les photos d'illustration sont chargées depuis Unsplash ; la carte du lieu depuis Google Maps, seulement si vous cliquez sur « Afficher la carte » ; le QR code est créé dans votre navigateur. Ces services voient votre adresse IP, comme tout site web."),
+      h("h2", {}, "Crédits photos (Unsplash)"),
+      h("ul", { class: "credits" }, Object.values(PHOTOS).map(([, author, what]) => h("li", {}, `${what} : ${author}`))),
       h("p", { class: "muted small" }, "Version provisoire de la phase de test, à valider juridiquement avant l'ouverture au public.")));
   return { node, title: "Conditions" };
 }
@@ -2288,6 +2733,8 @@ async function route() {
   if (head === "nouvel-evenement") return render(newEventScreen(a));
   if (head === "evenement" && a && b) return render(eventScreen(a, b, parts[3], parts[4], parts[5]));
   if (head === "rejoindre" && a && b) return render(joinScreen(a, b));
+  if (head === "taches") return render(myTasksScreen());
+  if (head === "budget") return render(myBudgetScreen());
   if (head === "plus") return render(settingsScreen());
   if (head === "profil") return render(profileScreen());
   return render(notFoundScreen());

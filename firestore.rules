@@ -20,6 +20,7 @@ rules_version = '2';
 //   families/{fid}/events/{eid}/expenses/{xid}        dépense (organisateur et trésorier)
 //   families/{fid}/events/{eid}/contributions/{cid}   contribution (+ private/identity si anonyme)
 //   families/{fid}/events/{eid}/summary/{budget|guests}  totaux lisibles par tous les participants
+//   families/{fid}/events/{eid}/committees/{id}      comité (nom, membres)
 //   families/{fid}/events/{eid}/guests/{jeton}        foyer invité, répond sans compte avec son lien
 //   families/{fid}/events/{eid}/public/invitation     carton d'invitation lisible avec le lien
 
@@ -56,6 +57,8 @@ service cloud.firestore {
     function contributionPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/contributions/$(cid); }
     function identityPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/contributions/$(cid)/private/identity; }
     function myContributionPath(fid, eid, cid) { return /databases/$(database)/documents/families/$(fid)/events/$(eid)/participants/$(me())/myContributions/$(cid); }
+    // Photos d'illustration proposées en couverture (clés de PHOTOS dans js/app.js).
+    function coverKeys() { return ['wedding', 'weddingHands', 'celebration', 'reunion', 'family', 'womenWax', 'naming', 'birthday', 'womenTrad', 'traditional', 'religious', 'communion']; }
     function eventTypes() { return ['WEDDING', 'NAMING_CEREMONY', 'COMMUNION', 'BIRTHDAY', 'RELIGIOUS_CEREMONY', 'FAMILY_REUNION', 'TRADITIONAL_CEREMONY', 'CUSTOM']; }
 
     // ─── Profil : visible et modifiable par son seul propriétaire ────────────
@@ -136,7 +139,8 @@ service cloud.firestore {
       match /events/{eid} {
         function validEvent() {
           return data().keys().hasOnly(['type', 'title', 'description', 'startsAt', 'venue', 'city',
-              'currency', 'budgetPlanned', 'expectedGuests', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+              'currency', 'budgetPlanned', 'expectedGuests', 'status', 'cover', 'createdBy', 'createdAt', 'updatedAt'])
+            && (data().get('cover', null) == null || data().get('cover', null) in coverKeys())
             && data().type in ['WEDDING', 'NAMING_CEREMONY', 'COMMUNION', 'BIRTHDAY', 'RELIGIOUS_CEREMONY',
                                'FAMILY_REUNION', 'TRADITIONAL_CEREMONY', 'CUSTOM']
             && text(data().title, 1, 120)
@@ -235,8 +239,12 @@ service cloud.firestore {
         // par le contributeur et le trésorier seulement (l'organisateur ne la voit pas).
         match /contributions/{cid} {
           function validContribution() {
-            return data().keys().hasOnly(['amount', 'status', 'anonymous', 'displayName', 'source', 'note', 'createdAt', 'updatedAt'])
-              && money(data().amount) && data().status in ['promised', 'declared', 'confirmed']
+            return data().keys().hasOnly(['amount', 'status', 'anonymous', 'displayName', 'source', 'note', 'kind', 'item', 'origin', 'createdAt', 'updatedAt'])
+              // Argent : montant > 0. En nature : description obligatoire, valeur estimée facultative (0 accepté).
+              && ((data().kind == 'money' && money(data().amount) && data().item == null)
+                || (data().kind == 'inkind' && nat(data().amount) && text(data().item, 1, 120)))
+              && data().origin in ['HOSTS', 'FAMILY', 'FRIENDS', 'DIASPORA', 'OTHER']
+              && data().status in ['promised', 'declared', 'confirmed']
               && ((data().anonymous == true && data().displayName == null) || (data().anonymous == false && text(data().displayName, 1, 80)))
               && data().source in ['self', 'treasurer'] && optText(data().note, 200)
               && data().updatedAt == request.time;
@@ -256,10 +264,11 @@ service cloud.firestore {
           allow update: if verified() && validContribution()
             && data().source == resource.data.source && data().createdAt == resource.data.createdAt
             && data().anonymous == resource.data.anonymous && data().displayName == resource.data.displayName
+            && data().kind == resource.data.kind
             && (
-              (isTreasurer(fid, eid) && changed().hasOnly(['status', 'amount', 'note', 'updatedAt']))
+              (isTreasurer(fid, eid) && changed().hasOnly(['status', 'amount', 'note', 'item', 'origin', 'updatedAt']))
               || (isMine() && resource.data.status != 'confirmed' && data().status in ['promised', 'declared']
-                && changed().hasOnly(['amount', 'status', 'note', 'updatedAt']))
+                && changed().hasOnly(['amount', 'status', 'note', 'item', 'origin', 'updatedAt']))
             );
           allow delete: if verified() && (isTreasurer(fid, eid) || (isMine() && resource.data.status != 'confirmed'));
 
@@ -278,14 +287,32 @@ service cloud.firestore {
           allow read: if verified() && isParticipant(fid, eid);
           allow create, update: if verified() && data().updatedAt == request.time && (
             (sid == 'budget' && isManager(fid, eid)
-              && data().keys().hasOnly(['spent', 'paid', 'confirmed', 'pending', 'contributors', 'updatedAt'])
-              && nat(data().spent) && nat(data().paid) && nat(data().confirmed) && nat(data().pending) && nat(data().contributors))
+              && data().keys().hasOnly(['spent', 'paid', 'confirmed', 'pending', 'contributors', 'inkind', 'updatedAt'])
+              && nat(data().spent) && nat(data().paid) && nat(data().confirmed) && nat(data().pending) && nat(data().contributors)
+              && nat(data().get('inkind', 0)))
             || (sid == 'guests' && isOrganizer(fid, eid)
               && data().keys().hasOnly(['households', 'invited', 'yes', 'no', 'pending', 'attending', 'updatedAt'])
               && nat(data().households) && nat(data().invited) && nat(data().yes) && nat(data().no)
               && nat(data().pending) && nat(data().attending))
           );
           allow delete: if false;
+        }
+
+        // ─── Comités : visibles par les participants, gérés par l'organisateur ──
+        match /committees/{cid} {
+          function validCommittee() {
+            return data().keys().hasOnly(['name', 'memberUids', 'memberNames', 'createdBy', 'createdAt', 'updatedAt'])
+              && text(data().name, 1, 80)
+              && data().memberUids is list && data().memberUids.size() <= 50
+              && data().memberNames is list && data().memberNames.size() == data().memberUids.size()
+              && data().updatedAt == request.time;
+          }
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && isOrganizer(fid, eid) && validCommittee()
+            && data().createdBy == me() && data().createdAt == request.time;
+          allow update: if verified() && isOrganizer(fid, eid) && validCommittee()
+            && data().createdBy == resource.data.createdBy && data().createdAt == resource.data.createdAt;
+          allow delete: if verified() && isOrganizer(fid, eid);
         }
 
         // ─── Invités : liste réservée aux organisateurs ; réponse sans compte ──
