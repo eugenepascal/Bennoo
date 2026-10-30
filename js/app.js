@@ -47,19 +47,32 @@ const updateProfile = (user, p) => user.updateProfile(p);
 
 /* Connexion avec Google : fenêtre surgissante ; si le navigateur la bloque (fréquent sur
    téléphone), on bascule sur une redirection vers Google puis retour sur Bennoo. */
+// Mémoire de session : "local" (IndexedDB, par défaut, comme Yond) ou "session" (sessionStorage)
+// si le navigateur a refusé IndexedDB lors d'une tentative précédente.
+const GOOGLE_PERSIST_KEY = "bennoo:auth-persistence";
+function isStorageError(err) {
+  return /closing|hidden|indexed ?db|database/i.test(String(err && err.message));
+}
 async function signInWithGoogle() {
   requireFirebase();
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  let mode = "local";
+  try { mode = localStorage.getItem(GOOGLE_PERSIST_KEY) || "local"; } catch (_) { mode = "session"; }
+  try {
+    await auth.setPersistence(mode === "session" ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL);
+  } catch (_) { /* navigation privée / ancien navigateur : on garde la valeur par défaut */ }
   try {
     await auth.signInWithPopup(provider);
   } catch (err) {
-    // Safari ferme parfois la mémoire locale (IndexedDB) pendant que la fenêtre Google est ouverte :
-    // Firebase renvoie alors « Database is closing/hidden » alors que la connexion a souvent réussi.
-    if (/closing|hidden|indexed ?db|database/i.test(String(err && err.message))) {
+    if (isStorageError(err)) {
+      // La connexion a parfois réussi malgré l'erreur : on laisse à Firebase le temps de le signaler.
       for (let i = 0; i < 20 && !auth.currentUser; i++) await new Promise((r) => setTimeout(r, 150));
       if (auth.currentUser) return;
-      throw Object.assign(new Error("Le navigateur a interrompu la connexion Google. Rechargez la page puis réessayez ; si cela se reproduit, essayez avec Chrome ou utilisez votre email."), { code: undefined });
+      // Sinon on bascule sur sessionStorage (sans IndexedDB) pour la prochaine tentative.
+      try { localStorage.setItem(GOOGLE_PERSIST_KEY, "session"); } catch (_) {}
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); } catch (_) {}
+      throw Object.assign(new Error("Le navigateur a bloqué la mémoire locale pendant la connexion Google. Cliquez de nouveau sur « Continuer avec Google » : Bennoo utilise maintenant une autre mémoire."), { code: undefined });
     }
     if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(err.code)) {
       await auth.signInWithRedirect(provider);
