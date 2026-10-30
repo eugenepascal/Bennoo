@@ -3,7 +3,9 @@ rules_version = '2';
 // Bennoo — règles d'accès Firestore (étape 1 : comptes, familles, événements).
 //
 // Ces règles SONT la sécurité de l'application : le site est public, seul Firestore
-// décide qui lit et écrit quoi. Chaque règle est couverte par tests/rules/.
+// décide qui lit et écrit quoi. Tout ce qui n'est pas autorisé ici est refusé.
+// Les comptes, mots de passe et sessions sont gérés par Firebase Authentication,
+// pas par Firestore : aucune règle n'est nécessaire pour eux.
 //
 // Structure :
 //   users/{uid}                                       profil privé
