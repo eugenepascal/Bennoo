@@ -93,6 +93,20 @@ et « Mes contributions », **jamais** la liste des dépenses ni les noms des co
 | 44 | A | **Modifier** l'événement : changer l'heure → Enregistrer, puis rouvrir le lien invité | Le carton affiche la nouvelle heure |
 | 45 | A | Invités → **Retirer** Famille Ndiaye, puis ouvrir son lien | « Cette invitation n'existe plus » |
 
+## Partie 5 bis — Écrans ajoutés pour coller aux maquettes
+
+| # | Qui | Action | Résultat attendu |
+| --- | --- | --- | --- |
+| 45a | A | Création d'un événement, étape 2 | 3 ou 4 photos de couverture au choix ; la photo choisie apparaît dans le bandeau de l'événement et sur l'accueil |
+| 45b | A | Aperçu → **Afficher la carte du lieu** | Carte Google Maps du lieu et de la ville |
+| 45c | A | Tâches → **Kanban** | 3 colonnes (À faire, En cours, Terminée) ; les boutons déplacent une tâche d'une colonne à l'autre |
+| 45d | A | Barre du bas → **Tâches** puis **Budget** | « Mes tâches » (assignées à moi / toutes) ; budget de chaque événement avec son anneau |
+| 45e | B | Budget → Contributions → onglet **En nature** → « Ajouter ma contribution » → **En nature** : « 2 sacs de riz de 50 kg », provenance Diaspora | La contribution apparaît sous « En nature » ; elle ne change pas les montants en argent |
+| 45f | A | Budget | Anneau « financé » ; lignes de provenance (Famille, Diaspora…) avec montants et % |
+| 45g | A | Participants → **Créer un comité** « Comité accueil » avec Moussa | Comité listé avec « 1 membre : Moussa Test » ; visible aussi dans Famille → Comités |
+| 45h | A | Invités → **Partager** sur un foyer | QR code, lien, boutons WhatsApp, E-mail, SMS ; scanner le QR code avec un téléphone ouvre la page de réponse |
+| 45i | A | Accueil (sur ordinateur, fenêtre large) | Événement à venir mis en avant avec photo et chiffres ; colonne « Activité récente » (tâches terminées, réponses, contributions) ; recherche d'événement |
+
 ## Partie 6 — Contrôles de sécurité rapides
 
 | # | Qui | Action | Résultat attendu |

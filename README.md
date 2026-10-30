@@ -76,9 +76,24 @@ Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche
 | Mon profil | Nom affiché, téléphone au format international | — |
 | Conditions et confidentialité | Ce que voient les autres, où sont les données | — |
 
-Sur téléphone, la navigation est une barre en bas (Accueil, Famille, Plus). Sur ordinateur,
-elle devient une barre latérale violette, comme la maquette « Version desktop ».
-Seules les rubriques déjà développées apparaissent : pas de bouton sans action.
+Sur téléphone, la navigation est une barre en bas (Accueil, Famille, Tâches, Budget, Plus), comme
+dans les maquettes. Sur ordinateur, elle devient une barre latérale violette (maquette « Version desktop »).
+
+### Ajouts du 30/10/2026 pour coller aux maquettes
+
+| Élément | Où |
+| --- | --- |
+| Photos d'illustration (Unsplash, libres de droits) : lancement, présentation, bandeau de la famille, bandeau et vignettes des événements | Partout ; crédits dans « Conditions » |
+| Photo de couverture au choix (3 ou 4 photos selon le type d'événement) | Création (étape 2) et « Modifier » |
+| Carte du lieu (Google Maps, chargée seulement au clic) | Création (étape 3) et aperçu de l'événement |
+| Accueil : recherche, événement à venir mis en avant (photo, avancement, chiffres, prochaines tâches), barre d'avancement sur chaque événement, **activité récente** | Accueil (2 colonnes sur grand écran, maquette 14) |
+| « Mes tâches » (assignées à moi / toutes) et « Budget » (anneau par événement) | Barre de navigation |
+| Vue **Kanban** des tâches | Tâches → Kanban |
+| Anneau du budget et répartition par **provenance** (hôtes, famille, amis, diaspora, autres) | Budget |
+| Contributions **Argent / En nature** | Budget → Contributions |
+| **Comités** (nom et membres) | Participants de l'événement ; onglet Comités de la famille |
+| Partage d'une invitation : **QR code**, lien, WhatsApp, e-mail, SMS, « Plus » | Invités → Partager |
+| Carton d'invitation avec ornements dorés | Invités → Carton |
 
 ### Types d'événements
 
@@ -175,9 +190,11 @@ families/{famille}/events/{événement}/participants/{uid}   rôle (organizer, t
   …/participants/{uid}/myContributions/{id}       index personnel « mes contributions »
   …/tasks/{id}                                    titre, description, échéance, statut, responsable
   …/expenses/{id}                                 libellé, catégorie, montant, fournisseur, date, statut
-  …/contributions/{id}                            montant, statut, anonyme, nom (vide si anonyme), origine, précision
+  …/contributions/{id}                            argent ou en nature, montant / valeur, objet, provenance, statut,
+                                                  anonyme, nom (vide si anonyme), origine (soi / trésorier), précision
   …/contributions/{id}/private/identity           qui a contribué (contributeur et trésorier seulement)
   …/summary/budget, …/summary/guests              totaux partagés avec tous les participants
+  …/committees/{id}                               comité : nom, membres
   …/guests/{jeton}                                foyer, téléphone, places, réponse, nombre présent, mot
   …/public/invitation                             carton : titre, type, date, lieu, qui invite, message
 ```
@@ -318,7 +335,7 @@ par **Firebase Authentication**, sans règle à écrire.
 | 1 | Comptes, familles, invitations, création d'événement, tableau de bord simple | Codée et essayée |
 | 2 | Tâches : responsable, échéance, statut, checklist selon la cérémonie, calendrier | Codée — à essayer |
 | 3 | Budget, dépenses, contributions (promise → déclarée → confirmée), anonymat, totaux | Codée — à essayer |
-| 4 | Invités par foyer, lien personnel WhatsApp, réponse (RSVP) sans compte ; QR code plus tard | Codée — à essayer |
+| 4 | Invités par foyer, lien personnel WhatsApp, QR code, réponse (RSVP) sans compte | Codée — à essayer |
 | 5 | Tableau de bord complet, installation sur téléphone, pages légales, mise en ligne | Prévue |
 | 6 | Album photos de l'événement (forfait Firebase Blaze) | Prévue |
 | — | Avant l'ouverture au public : tests avec 5 familles, avis juridique (CDP Sénégal, RGPD) | Prévue |
@@ -353,7 +370,11 @@ version en wolof · Bennoo Pro (prestataires et devis).
   retard (la date de mise à jour est affichée).
 - **Trésorier obligatoire pour confirmer** : l'organisateur ne confirme pas les contributions (décision
   sur l'anonymat). Il faut désigner un trésorier dans l'onglet Participants.
-- **Justificatifs de dépenses, QR code des invitations, rappels automatiques** : prévus plus tard.
+- **Justificatifs de dépenses, photos personnelles (profil, couverture, album), rappels automatiques** : prévus
+  plus tard (stockage de fichiers = forfait Blaze).
+- **Photos d'illustration** : banque Unsplash, chargées depuis images.unsplash.com ; si le site n'est pas
+  joignable, un dégradé violet s'affiche à la place.
+- **Comités** : simple regroupement de participants (nom + membres) ; pas encore de tâches par comité.
 - **Photos** : le stockage de fichiers Firebase exige le forfait Blaze (carte bancaire) depuis février 2026.
 - **Illustrations** : les maquettes utilisent des photos de familles ; l'application utilise pour
   l'instant des dégradés, le logo et des emojis. Des photos haute définition libres de droits peuvent

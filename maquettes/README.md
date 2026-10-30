@@ -45,4 +45,6 @@ La colonne **V1** indique ce qui sera développé dans la première version (sit
 - **Connexion** par email et par Google ; Apple et téléphone plus tard.
 - **Rôles simplifiés** : organisateur, trésorier, membre pour un événement ; l'écran « Quel est votre
   rôle ? » devient le rôle attribué par l'organisateur. Les invités répondent sans compte.
+- **Photos** : les photos des maquettes sont remplacées par des photos libres de droits (Unsplash) proches
+  du thème ; les vraies photos de chaque famille viendront avec l'album (stockage de fichiers).
 - **Lisibilité** : textes d'au moins 14 px et barre de navigation identique sur tous les écrans.
