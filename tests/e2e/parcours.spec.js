@@ -75,7 +75,7 @@ test("étape 1 : comptes, famille, invitation, événement et confidentialité",
   // ── Création d'un événement en 5 étapes ──
   await a.goto("/#/");
   await a.getByRole("link", { name: "+ Créer" }).click();
-  await expect(a.getByRole("heading", { name: "Type d'événement" })).toBeVisible();
+  await expect(a.getByRole("heading", { name: "Type d'événement", exact: true })).toBeVisible();
   await a.getByText("Mariage", { exact: true }).click();
   await a.getByRole("button", { name: "Suivant" }).click();
   await a.getByLabel("Nom de l'événement").fill("Mariage de Fatou et Mamadou");
