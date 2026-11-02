@@ -33,7 +33,7 @@ Canada, États-Unis…) qui organisent elles-mêmes, sans organisateur professio
 | Élément | État |
 | --- | --- |
 | Étape 1 : comptes (email et Google), familles, invitations, événements | **Codée et essayée** sur le projet Firebase réel (connexion Google, accueil) |
-| Étapes 2 à 4 : tâches et calendrier, budget, dépenses, contributions, invités et réponses | **Codées** d'après les maquettes (30/10/2026) ; **à essayer** avec le [scénario de test](docs/scenario-de-test.md) |
+| Étapes 2 à 4 : tâches et calendrier, budget, dépenses, contributions, invités et réponses | **Codées et essayées** le 02/11/2026 côté organisateur et invité sans compte ([rapport de test](docs/rapport-de-test-2026-11-02.md)) ; rôles trésorier et membre à essayer avec un second compte |
 | Règles de sécurité Firestore | Étape 1 testée sur l'émulateur (18 tests) ; étapes 2 à 4 **écrites, non testées sur émulateur** (indisponible dans l'environnement de développement) : à vérifier avec le scénario de test |
 | Liaison avec le projet Firebase | **Faite** : projet `bennoo-4186e`, configuration en haut de `js/app.js` (sans Google Analytics) |
 | Étapes 5 et 6 (installation sur téléphone, pages légales, album photos) | **Prévues** |
