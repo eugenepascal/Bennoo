@@ -1584,7 +1584,7 @@ async function eventOverview(ctx) {
 
   return h("div", { class: "form" },
     h("div", { class: "kpis" },
-      h("div", { class: "kpi big" }, h("span", { class: "v" }, n === null ? "—" : n > 0 ? `J - ${n}` : n === 0 ? "Jour J" : "Passé"),
+      h("div", { class: "kpi big" }, h("span", { class: "v" }, n === null ? "—" : n > 0 ? `J-${n}` : n === 0 ? "Jour J" : "Passé"),
         h("span", { class: "l" }, n === null ? "Date à fixer" : n > 0 ? "avant le grand jour" : n === 0 ? "c'est aujourd'hui !" : "événement passé")),
       h("div", { class: "kpi kpi-ring" }, ring(progress, "de l'organisation"),
         h("span", { class: "l" }, tasks.length ? "Organisation (tâches terminées)" : "Aucune tâche pour l'instant"))),
@@ -2294,7 +2294,7 @@ async function eventScreen(fid, eid, tab, sub, extra) {
 
   const node = screen(
     h("a", { href: `#/famille/${enc(fid)}/evenements`, class: "back", "aria-label": `Retour à ${family.name}` }, "‹"),
-    photoBackground(h("section", { class: "event-hero" },
+    photoBackground(h("section", { class: `event-hero${active === "apercu" && !tab ? "" : " compact"}` },
       h("span", { class: "type" }, EVENT_ICONS[event.type], " ", EVENT_TYPES[event.type]), " ",
       h("span", { class: "type" }, `Votre rôle : ${EVENT_ROLES[event.myRole]}`),
       h("h1", {}, event.title),

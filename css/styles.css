@@ -379,3 +379,13 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .credits { margin: 0; padding-left: 18px; font-size: .88rem; color: var(--muted); }
 .card.center { align-items: center; }
 @media (min-width: 900px) { .tabbar a:not(.brand-side) { font-size: .95rem; } }
+
+/* Corrections après le test du 02/11/2026 (vue téléphone) */
+.kpi.big .v { white-space: nowrap; }
+@media (max-width: 480px) { .kpi.big .v { font-size: 1.8rem; } }
+.event-hero.compact { min-height: 0; padding: 14px 16px; }
+.event-hero.compact > .type { display: none; }
+.event-hero.compact h1 { font-size: 1.15rem; margin: 0; }
+.event-hero.compact .sub { font-size: .85rem; }
+.orn { width: 78px; height: 78px; opacity: .8; }
+.invitation { padding: 44px 26px; }
