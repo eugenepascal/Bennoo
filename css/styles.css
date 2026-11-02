@@ -271,7 +271,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
 .cal-grid .dow { font-size: .8rem; color: var(--muted); font-weight: 700; padding: 4px 0; }
-.cal-grid .day { position: relative; aspect-ratio: 1; min-height: 38px; border: 0; border-radius: 10px; background: transparent; font-weight: 600; cursor: pointer; color: var(--ink); }
+.cal-grid .day { position: relative; aspect-ratio: 1; min-height: 38px; max-height: 52px; width: 100%; max-width: 52px; justify-self: center; border: 0; border-radius: 10px; background: transparent; font-weight: 600; cursor: pointer; color: var(--ink); }
 .cal-grid .day:hover { background: var(--violet-100); }
 .cal-grid .day.today { outline: 1.5px solid var(--violet-400); }
 .cal-grid .day.has::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--violet-600); }

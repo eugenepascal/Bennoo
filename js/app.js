@@ -1506,6 +1506,9 @@ function checklistFor(event) {
       dueAt = new Date(event.startsAt);
       dueAt.setDate(dueAt.getDate() - days);
       dueAt.setHours(10, 0, 0, 0);
+      // Événement proche : une échéance déjà passée est ramenée à aujourd'hui (pas de tâche « en retard » dès la création).
+      const today = new Date(); today.setHours(10, 0, 0, 0);
+      if (dueAt < today) dueAt = today;
     }
     return { title, dueAt, status: "todo", notes: null, assigneeUid: null };
   });
@@ -1733,7 +1736,7 @@ function calendar(ctx, tasks) {
         grid,
         h("p", { class: "muted small cal-legend" }, h("span", { class: "dot" }), " tâche  ", h("span", { class: "dot gold" }), " jour de l'événement")),
       shown.length
-        ? [...groups.values()].map((list) => h("section", {}, h("h3", { class: "cal-day" }, formatDate(list[0].dueAt)), h("ul", { class: "list card-flat" }, list.map((t) => taskItem(ctx, t)))))
+        ? h("div", { class: "form" }, [...groups.values()].map((list) => h("section", {}, h("h3", { class: "cal-day" }, formatDate(list[0].dueAt)), h("ul", { class: "list card-flat" }, list.map((t) => taskItem(ctx, t))))))
         : h("p", { class: "muted small" }, selected ? "Aucune tâche ce jour-là." : "Aucune tâche avec une échéance ce mois-ci."),
       tasks.some((t) => !t.dueAt) ? h("p", { class: "muted small" }, `${plural(tasks.filter((t) => !t.dueAt).length, "tâche")} sans échéance (visibles dans la liste).`) : null,
     );
@@ -2469,7 +2472,7 @@ async function myTasksScreen() {
     }).filter(Boolean);
     box.replaceChildren(
       filterChips([["mine", "Assignées à moi"], ["all", "Toutes les tâches à faire"]], mode, (k) => { mode = k; draw(); }),
-      sections.length ? sections : h("div", { class: "card empty" }, h("strong", {}, mode === "mine" ? "Aucune tâche ne vous est assignée." : "Aucune tâche à faire."),
+      sections.length ? h("div", { class: "form" }, sections) : h("div", { class: "card empty" }, h("strong", {}, mode === "mine" ? "Aucune tâche ne vous est assignée." : "Aucune tâche à faire."),
         h("span", {}, events.length ? "Les tâches se créent dans chaque événement (onglet Tâches)." : "Créez ou rejoignez un événement pour commencer.")));
   };
   draw();
