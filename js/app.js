@@ -2033,7 +2033,7 @@ function contributionForm(ctx, existing) {
   form.elements.origin.value = existing?.origin ?? "FAMILY";
   const syncKind = () => {
     const k = existing ? kind : form.elements.kind.value;
-    form.elements.item.closest(".field").style.display = k === "inkind" ? "" : "none";
+    form.querySelector("[name=item]").closest(".field").style.display = k === "inkind" ? "" : "none";
     form.elements.amount.closest(".field").querySelector("label").textContent = k === "inkind" ? `Valeur estimée (${CURRENCIES[event.currency]}, facultatif)` : `Montant (${CURRENCIES[event.currency]})`;
   };
   form.addEventListener("change", syncKind);
@@ -2096,7 +2096,7 @@ function receivedGiftForm(ctx) {
     });
   });
   form.elements.origin.value = "FAMILY";
-  const sync = () => { form.elements.item.closest(".field").style.display = form.elements.kind.value === "inkind" ? "" : "none"; };
+  const sync = () => { form.querySelector("[name=item]").closest(".field").style.display = form.elements.kind.value === "inkind" ? "" : "none"; };
   form.addEventListener("change", sync);
   sync();
   return h("div", { class: "form" }, subHeader("Don reçu d'un proche", `${base}/budget/contributions`),
