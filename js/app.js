@@ -1207,9 +1207,19 @@ async function memberScreen(fid, uid) {
 
 async function joinScreen(fid, token) {
   if (!isToken(token)) return notFoundScreen("Ce lien d'invitation n'est pas valide.");
+  // Déjà membre : on le dit clairement au lieu de rediriger sans explication
+  // (cas fréquent : l'organisateur ouvre lui-même le lien qu'il vient de créer).
   if (await data.isFamilyMember(fid).catch(() => false)) {
-    location.hash = `#/famille/${enc(fid)}`;
-    return null;
+    const out = h("button", { type: "button", class: "btn btn-block" }, "Me déconnecter pour utiliser un autre compte");
+    out.addEventListener("click", async () => { sessionStorage.setItem("bennoo:after-login", `rejoindre/${fid}/${token}`.replace(/^/, "/")); await signOut(); });
+    const node = bare(
+      h("div", { class: "auth-brand" }, h("img", { src: "images/logo.svg", alt: "" }), h("h1", {}, "Vous êtes déjà membre")),
+      h("section", { class: "card form" },
+        h("p", {}, "Vous êtes connecté(e) avec ", h("strong", {}, auth.currentUser.email), ", qui fait déjà partie de cette famille."),
+        h("p", { class: "muted small" }, "Ce lien sert à faire entrer une autre personne : envoyez-le-lui, ou ouvrez-le dans une fenêtre de navigation privée pour créer un autre compte."),
+        h("a", { href: `#/famille/${enc(fid)}`, class: "btn btn-primary btn-block" }, "Aller à la famille"),
+        out));
+    return { node, title: "Déjà membre" };
   }
   const invite = await data.getInvite(fid, token);
   if (!invite) return notFoundScreen("Ce lien d'invitation n'existe pas ou a été désactivé.");
