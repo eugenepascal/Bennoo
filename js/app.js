@@ -1126,7 +1126,8 @@ async function invitePanel(fid, familyName) {
   async function refresh() {
     const invites = await data.listInvites(fid);
     list.replaceChildren(...(invites.length === 0 ? [h("p", { class: "muted" }, "Aucun lien actif.")] : invites.map((i) => {
-      const url = inviteUrl(location.origin, fid, i.token);
+      // Adresse complète du site (origine + chemin) : sur GitHub Pages, le site est sous /Bennoo/.
+      const url = inviteUrl(location.origin + location.pathname.replace(/index\.html$/, "").replace(/\/$/, ""), fid, i.token);
       const revoke = h("button", { type: "button", class: "btn btn-sm" }, "Désactiver");
       revoke.addEventListener("click", () => withBusy(revoke, async () => { await data.revokeInvite(fid, i.token); toast("Lien désactivé"); await refresh(); }));
       const copy = h("button", { type: "button", class: "btn btn-sm" }, "Copier");
