@@ -1,0 +1,28 @@
+# Mise en ligne automatique de Bennoo sur Firebase Hosting (https://bennoo-4186e.web.app)
+# à chaque modification de la branche main.
+# Prérequis (une seule fois) : le secret FIREBASE_SERVICE_ACCOUNT_BENNOO_4186E dans
+# GitHub → Settings → Secrets and variables → Actions (voir README, « Mettre en ligne »).
+# Tant que ce secret n'existe pas, l'étape de mise en ligne est simplement ignorée.
+name: Mise en ligne Firebase Hosting
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BENNOO_4186E }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mettre en ligne sur bennoo-4186e.web.app
+        if: env.FIREBASE_SA != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BENNOO_4186E }}
+          channelId: live
+          projectId: bennoo-4186e
+      - name: Secret absent
+        if: env.FIREBASE_SA == ''
+        run: echo "Secret FIREBASE_SERVICE_ACCOUNT_BENNOO_4186E absent : mise en ligne Firebase ignorée."

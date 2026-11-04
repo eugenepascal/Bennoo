@@ -326,8 +326,16 @@ par **Firebase Authentication**, sans règle à écrire.
 - **Sur son ordinateur** : télécharger le dépôt et ouvrir `index.html` dans le navigateur.
 - **GitHub Pages** : Settings → Pages → branche `main`, dossier `/ (root)`. Pour un dépôt privé,
   GitHub demande un compte payant ; sinon rendre le dépôt public, comme Lumen et Yond.
-- **Firebase Hosting** : `npx firebase login`, puis `npx firebase init hosting` (dossier public : `.`),
-  puis `npx firebase deploy --only hosting`. Adresse obtenue : `https://<projet>.web.app`.
+- **Firebase Hosting** (recommandé, adresse `https://bennoo-4186e.web.app`) : le site et la connexion
+  Google sont à la même adresse, donc plus d'avertissements « Cross-Origin-Opener-Policy » et une
+  connexion fiable sur iPhone. Le dépôt contient `firebase.json`, `.firebaserc` et
+  `.github/workflows/firebase-hosting.yml` : chaque modification de `main` est mise en ligne
+  automatiquement, dès que le secret GitHub `FIREBASE_SERVICE_ACCOUNT_BENNOO_4186E` existe.
+  Pour le créer une fois : `git clone https://github.com/eugenepascal/Bennoo && cd Bennoo`, puis
+  `npx firebase-tools login` et `npx firebase-tools init hosting:github` (dépôt `eugenepascal/Bennoo`,
+  pas de script de build, mise en ligne au push sur `main` : oui ; ne pas écraser `firebase.json`).
+  Mise en ligne manuelle possible : `npx firebase-tools deploy --only hosting`.
+  Sur cette adresse, `authDomain` devient automatiquement `bennoo-4186e.web.app` (voir `js/app.js`).
 
 ---
 

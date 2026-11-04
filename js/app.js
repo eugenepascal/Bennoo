@@ -12,7 +12,9 @@
    Ces valeurs ne sont pas secrètes : la sécurité repose sur les règles Firestore. */
 const firebaseConfig = {
   apiKey: "AIzaSyAD0c71YrcmQiw26i7c3k97iC6ewSQ1gdo",
-  authDomain: "bennoo-4186e.firebaseapp.com",
+  // Sur Firebase Hosting, la connexion passe par la même adresse que le site (pas d'aller-retour
+  // entre deux domaines, connexion Google fiable sur iPhone) ; ailleurs (GitHub Pages), par firebaseapp.com.
+  authDomain: /(^|\.)bennoo-4186e\.(web\.app|firebaseapp\.com)$/.test(location.hostname) ? location.hostname : "bennoo-4186e.firebaseapp.com",
   projectId: "bennoo-4186e",
   storageBucket: "bennoo-4186e.firebasestorage.app",
   messagingSenderId: "746683819473",
