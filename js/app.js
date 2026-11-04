@@ -2625,6 +2625,190 @@ async function shareGuestPanel(ctx, token) {
     h("a", { href: `${base}/invites`, class: "btn btn-primary btn-block" }, `Voir les réponses (${answered})`));
 }
 
+/* ---------- Aide intégrée : un paragraphe explicatif par page, et la page de bienvenue ----------
+   Chaque page affiche en haut un encadré « À quoi sert cette page ? » que l'on peut replier ;
+   le choix est mémorisé sur l'appareil. Les textes sont rassemblés ici pour être relus facilement. */
+const HELP = {
+  home: ["Votre accueil", [
+    "Retrouvez ici tous les événements auxquels vous participez, avec leur date et l'avancement de leur organisation (pourcentage de tâches terminées). Touchez un événement pour l'ouvrir.",
+    "« + Créer » lance un nouvel événement : vous en deviendrez l'organisateur. Sur ordinateur, la colonne « Activité récente » résume les dernières nouvelles : tâches terminées, réponses des invités, contributions."]],
+  families: ["Vos familles", [
+    "Une famille est l'espace commun où vos proches se retrouvent. Chaque événement appartient à une famille, et seuls ses membres peuvent y être ajoutés.",
+    "Vous pouvez appartenir à plusieurs familles (par exemple côté père et côté mère) et en créer une nouvelle ici."]],
+  "family-members": ["Les membres de la famille", [
+    "La liste des personnes qui ont rejoint la famille, avec leur rôle : le propriétaire (qui l'a créée), les administrateurs (qui invitent et gèrent les membres) et les membres.",
+    "Pour faire entrer un proche, un administrateur crée un lien d'invitation et le lui envoie, par WhatsApp par exemple. Le lien est valable 7 jours."]],
+  "family-events": ["Les événements de la famille", [
+    "Les événements de cette famille auxquels vous participez. Un événement n'est visible que par ses participants : il peut exister d'autres événements que vous ne voyez pas.",
+    "Tout membre peut créer un événement ; il en devient l'organisateur."]],
+  "family-committees": ["Les comités", [
+    "Un comité regroupe quelques participants autour d'une mission : accueil, décoration, restauration, logistique…",
+    "Les comités se créent dans l'onglet « Participants » de chaque événement ; cette page les rassemble pour toute la famille."]],
+  "family-invite": ["Inviter un proche", [
+    "Créez un lien personnel, puis envoyez-le par WhatsApp ou copiez-le. La personne l'ouvre, crée son compte (ou se connecte) et rejoint la famille comme simple membre.",
+    "Un lien sert à plusieurs personnes pendant 7 jours. Vous pouvez le désactiver à tout moment s'il a été transmis par erreur."]],
+  member: ["Fiche d'un membre", [
+    "Le rôle du membre dans la famille et sa date d'arrivée. Un administrateur peut changer son rôle ou le retirer ; le propriétaire ne peut être ni modifié ni retiré.",
+    "Le numéro de téléphone de chacun reste privé : il n'est pas affiché ici."]],
+  "new-event": ["Créer un événement", [
+    "Cinq étapes : le type de cérémonie, le nom et la photo de couverture, la date et le lieu, le budget et le nombre d'invités prévus, puis les membres de la famille qui organiseront avec vous.",
+    "Rien n'est définitif : tout se modifie ensuite. Vous en serez l'organisateur, et seuls les participants choisis verront l'événement."]],
+  overview: ["Le tableau de bord de l'événement", [
+    "L'essentiel en un coup d'œil : le nombre de jours avant le grand jour, l'avancement de l'organisation (tâches terminées), les invités confirmés, les tâches restantes, le budget et les contributions confirmées.",
+    "Les onglets donnent accès au détail : Tâches, Budget, Invités (organisateurs) et Participants. L'organisateur modifie les informations avec « Modifier »."]],
+  tasks: ["Les tâches", [
+    "La liste de tout ce qu'il reste à faire, avec son échéance, son responsable et son statut (À faire, En cours, Terminée). Cochez une tâche pour la terminer.",
+    "L'organisateur crée et attribue les tâches ; il peut ajouter d'un clic une checklist adaptée à la cérémonie. Le responsable d'une tâche peut changer son statut. Les vues Calendrier et Kanban montrent les mêmes tâches autrement."]],
+  calendar: ["Le calendrier", [
+    "Les tâches placées à leur date d'échéance, mois par mois. Un point signale un jour avec des tâches, le jour de l'événement est en doré.",
+    "Touchez un jour pour n'afficher que ses tâches ; touchez-le à nouveau pour revoir tout le mois."]],
+  kanban: ["La vue Kanban", [
+    "Les tâches rangées en trois colonnes : À faire, En cours, Terminée. Utilisez les boutons de chaque carte pour la faire passer d'une colonne à l'autre.",
+    "Pratique pour voir d'un coup ce qui avance et ce qui bloque."]],
+  "task-new": ["Nouvelle tâche", [
+    "Donnez un titre clair, une échéance si possible et un responsable parmi les participants. Le responsable verra la tâche dans « Mes tâches » et pourra changer son statut."]],
+  task: ["Détail d'une tâche", [
+    "Tout sur une tâche : échéance, responsable, description et statut. Le responsable et l'organisateur changent le statut avec les trois boutons.",
+    "Seul l'organisateur peut modifier ou supprimer la tâche."]],
+  "budget-expenses": ["Le budget et les dépenses", [
+    "L'anneau montre la part du budget déjà financée par les contributions confirmées, et d'où viennent ces fonds (hôtes, famille, amis, diaspora…). Dessous : contributions en attente, dépenses engagées, dépenses payées et reste à financer.",
+    "Les dépenses (salle, traiteur, tenues…) sont visibles et modifiables par l'organisateur et le trésorier seulement. Un simple membre ne voit que les totaux et ses propres contributions."]],
+  "budget-contributions": ["Les contributions", [
+    "Chaque participant déclare ce qu'il donne : une promesse (« je compte donner ») ou un don déjà fait, en argent ou en nature (riz, chaises, transport…). Le trésorier confirme à réception.",
+    "Bennoo ne gère aucun paiement : on donne comme d'habitude (espèces, Wave, Orange Money…), puis on déclare ici. Une contribution anonyme n'affiche son nom qu'au contributeur et au trésorier."]],
+  expense: ["Une dépense", [
+    "Indiquez le montant, la catégorie, le fournisseur et la date, puis si la dépense est déjà payée ou encore à payer. Elle compte aussitôt dans les dépenses engagées du budget."]],
+  contribution: ["Votre contribution", [
+    "Choisissez Argent ou En nature, le montant (ou une description et une valeur estimée), la provenance et où vous en êtes : promise ou déjà donnée.",
+    "Cochez « anonymement » pour que seul le trésorier voie votre nom. Tant que le trésorier ne l'a pas confirmée, vous pouvez la modifier ou la retirer."]],
+  gift: ["Don reçu d'un proche", [
+    "Pour un proche qui n'a pas de compte Bennoo (un oncle, une famille de la diaspora…) : le trésorier enregistre directement son don, en argent ou en nature."]],
+  guests: ["Les invités", [
+    "Ajoutez chaque foyer invité avec son nombre de places. Chaque foyer reçoit un lien personnel ; il répond oui ou non, et combien de personnes viendront, sans créer de compte.",
+    "Les compteurs se mettent à jour avec les réponses. La liste n'est visible que des organisateurs : les numéros de téléphone ne servent qu'à ouvrir WhatsApp."]],
+  card: ["Le carton d'invitation", [
+    "C'est ce que voient vos invités en ouvrant leur lien : qui invite, le nom de l'événement, la date, l'heure, le lieu et votre message.",
+    "La date et le lieu suivent automatiquement l'événement : si vous les modifiez, le carton est mis à jour."]],
+  share: ["Partager une invitation", [
+    "Le lien personnel de ce foyer, son QR code (à scanner avec un téléphone) et des boutons pour l'envoyer par WhatsApp, e-mail ou SMS.",
+    "Chaque lien est propre à un foyer : ne le publiez pas sur un groupe ouvert."]],
+  participants: ["Les participants et les comités", [
+    "Les membres de la famille qui organisent l'événement, avec leur rôle : organisateur (gère tout), trésorier (gère l'argent et confirme les contributions) ou membre (suit et participe).",
+    "Seuls les participants voient l'événement. Dessous, l'organisateur peut créer des comités pour répartir les missions."]],
+  edit: ["Modifier l'événement", [
+    "Corrigez le nom, la date, le lieu, le budget, le nombre d'invités prévu ou la photo de couverture. Les participants voient aussitôt les changements, et le carton d'invitation suit."]],
+  "my-tasks": ["Mes tâches", [
+    "Les tâches qui vous sont confiées, dans tous vos événements à venir. « Toutes les tâches à faire » montre aussi celles des autres, pour avoir une vue d'ensemble."]],
+  "my-budget": ["Le budget de mes événements", [
+    "Pour chaque événement : la part du budget financée par les contributions confirmées et le reste à financer. Touchez un événement pour voir son budget en détail."]],
+  settings: ["Paramètres", [
+    "Votre profil, vos familles, ce que voient les autres membres, la langue et la déconnexion. « Guide de Bennoo » réaffiche la page de bienvenue."]],
+  profile: ["Mon profil", [
+    "Le nom affiché aux autres membres et votre téléphone, au format international (+221…, +33…). Le téléphone reste visible de vous seul."]],
+  join: ["Rejoindre une famille", [
+    "Un proche vous a invité. En rejoignant la famille, vous verrez ses membres et pourrez être ajouté à ses événements. Vous entrez comme simple membre."]],
+  rsvp: ["Répondre à l'invitation", [
+    "Dites aux organisateurs si vous serez présents, et combien de personnes viendront avec vous. Pas besoin de compte : ce lien vous est personnel.",
+    "Vous pouvez revenir sur ce lien pour modifier votre réponse."]],
+};
+
+/** Quelle aide pour l'adresse affichée ? */
+function helpKeyFor(path) {
+  const p = path.split("/").filter(Boolean);
+  const [head, , , t, sub] = p;
+  if (!head) return "home";
+  if (head === "familles") return "families";
+  if (head === "famille") {
+    const tab = p[2];
+    return tab === "membre" ? "member" : tab === "evenements" ? "family-events" : tab === "comites" ? "family-committees" : tab === "inviter" ? "family-invite" : "family-members";
+  }
+  if (head === "nouvel-evenement") return "new-event";
+  if (head === "evenement") {
+    if (!t) return "overview";
+    if (t === "taches") return sub === "calendrier" ? "calendar" : sub === "kanban" ? "kanban" : sub === "nouvelle" ? "task-new" : "tasks";
+    if (t === "tache") return "task";
+    if (t === "budget") return sub === "contributions" ? "budget-contributions" : sub === "depense" ? "expense" : ["contribuer", "contribution"].includes(sub) ? "contribution" : sub === "don-recu" ? "gift" : "budget-expenses";
+    if (t === "invites") return sub === "carton" ? "card" : sub === "partager" ? "share" : "guests";
+    if (t === "participants") return "participants";
+    if (t === "modifier") return "edit";
+  }
+  return { taches: "my-tasks", budget: "my-budget", plus: "settings", profil: "profile", rejoindre: "join", rsvp: "rsvp" }[head] ?? null;
+}
+
+const helpStore = {
+  closed(key) { try { return localStorage.getItem(`bennoo:help:${key}`) === "closed"; } catch { return false; } },
+  set(key, closed) { try { closed ? localStorage.setItem(`bennoo:help:${key}`, "closed") : localStorage.removeItem(`bennoo:help:${key}`); } catch { /* stockage indisponible */ } },
+  reset() { try { Object.keys(localStorage).filter((k) => k.startsWith("bennoo:help:")).forEach((k) => localStorage.removeItem(k)); } catch { /* idem */ } },
+};
+
+function helpBox(key) {
+  const entry = HELP[key];
+  if (!entry) return null;
+  const [title, paragraphs] = entry;
+  const box = h("details", { class: "help-box", open: !helpStore.closed(key) },
+    h("summary", {}, h("span", { class: "help-ico", "aria-hidden": "true" }, "i"), h("span", {}, `À quoi sert cette page ? · ${title}`)),
+    h("div", { class: "help-body" }, paragraphs.map((t) => h("p", {}, t))));
+  box.addEventListener("toggle", () => helpStore.set(key, !box.open));
+  return box;
+}
+
+/** Place l'aide juste sous l'en-tête de la page (titre, bandeau d'événement et onglets). */
+function insertHelp(node, path) {
+  const box = helpBox(helpKeyFor(path));
+  if (!box || !node.querySelector) return;
+  const anchor = node.querySelector(":scope > nav.tabs") ?? node.querySelector(":scope > .screen-head, :scope > .hello, :scope > .family-head, :scope > .auth-brand");
+  if (anchor) anchor.after(box); else node.prepend(box);
+}
+
+// ─── Page de bienvenue : s'affiche une fois après la première connexion ──
+const welcomeSeen = {
+  get(uid) { try { return localStorage.getItem(`bennoo:welcome:${uid}`) === "1"; } catch { return true; } },
+  set(uid) { try { localStorage.setItem(`bennoo:welcome:${uid}`, "1"); } catch { /* idem */ } },
+};
+
+async function welcomeScreen() {
+  const [profile, families] = await Promise.all([data.getProfile(), data.listMyFamilies()]);
+  welcomeSeen.set(auth.currentUser.uid);
+  const name = firstName(profile?.displayName ?? auth.currentUser.displayName ?? "");
+  const step = (n, ico, title, text) => h("li", { class: "welcome-step" }, h("span", { class: "n", "aria-hidden": "true" }, String(n)),
+    h("div", {}, h("h3", {}, `${ico} ${title}`), h("p", { class: "muted" }, text)));
+  const reset = h("button", { type: "button", class: "link-btn" }, "Réafficher les aides repliées sur toutes les pages");
+  reset.addEventListener("click", () => { helpStore.reset(); toast("Les aides sont de nouveau affichées"); });
+  const hero = photoBackground(h("section", { class: "welcome-hero" },
+    h("img", { src: "images/logo.svg", alt: "", width: 64, height: 64 }),
+    h("h1", {}, name ? `Bienvenue sur Bennoo, ${name} !` : "Bienvenue sur Bennoo !"),
+    h("p", {}, "Ensemble pour vos moments précieux")), "womenTrad", 1200, 700,
+    "linear-gradient(180deg, rgba(76,29,149,.55), rgba(30,15,69,.9))");
+  const node = bare(
+    hero,
+    h("section", { class: "card form" },
+      h("h2", {}, "Le but de Bennoo"),
+      h("p", {}, "Un mariage, un baptême, une communion, un anniversaire, une cérémonie religieuse ou une réunion de famille demandent beaucoup d'organisation, souvent entre Dakar, les régions et la diaspora. Les informations se perdent dans les groupes WhatsApp, les cahiers et les appels."),
+      h("p", {}, "Bennoo réunit tout au même endroit, pour toute la famille : qui fait quoi et pour quand, combien coûte l'événement et qui y contribue, qui est invité et qui a répondu. Chacun voit où en est la préparation, où qu'il se trouve.")),
+    h("section", {},
+      h("h2", {}, "Comment ça marche"),
+      h("ol", { class: "welcome-steps" },
+        step(1, "👨‍👩‍👧", "Créez ou rejoignez votre famille", "C'est l'espace commun de vos proches. Invitez-les avec un lien envoyé par WhatsApp."),
+        step(2, "💍", "Créez un événement", "Choisissez la cérémonie, la date, le lieu et le budget. Désignez les participants : organisateurs, trésorier, membres."),
+        step(3, "✅", "Répartissez les tâches", "Une checklist adaptée à la cérémonie est proposée. Chacun suit les tâches qui lui sont confiées."),
+        step(4, "💰", "Suivez le budget et les contributions", "Les dépenses, les dons promis et reçus, en argent ou en nature, et le reste à financer. Le trésorier confirme."),
+        step(5, "💌", "Invitez et recevez les réponses", "Un carton d'invitation et un lien personnel par foyer : vos invités répondent sans créer de compte."))),
+    h("section", { class: "card form" },
+      h("h2", {}, "Votre vie privée"),
+      h("ul", { class: "welcome-list" },
+        h("li", {}, "Un événement n'est visible que de ses participants, même au sein de la famille."),
+        h("li", {}, "Un simple membre voit les totaux du budget, pas le détail des dons de chacun."),
+        h("li", {}, "Une contribution peut être anonyme : seul le trésorier connaît le nom."),
+        h("li", {}, "Aucun paiement ne passe par Bennoo, et vos données ne sont ni vendues ni utilisées pour de la publicité."))),
+    h("p", { class: "muted small" }, "Sur chaque page, l'encadré « À quoi sert cette page ? » explique ce que vous pouvez y faire. Vous pouvez le replier, et revoir ce guide depuis Plus → Guide de Bennoo."),
+    reset,
+    families.length
+      ? h("a", { href: "#/", class: "btn btn-primary btn-block" }, "Aller à mon accueil")
+      : h("a", { href: "#/familles", class: "btn btn-primary btn-block" }, "Commencer : créer ma famille"),
+  );
+  return { node, title: "Bienvenue" };
+}
+
 // ─── 13. Paramètres et profil ─────────────────────────────────────────────
 async function settingsScreen() {
   const profile = await data.getProfile();
@@ -2637,6 +2821,7 @@ async function settingsScreen() {
     header("Paramètres"),
     h("section", { class: "card hello" }, avatar(name), h("div", { class: "grow" }, h("h2", {}, name), h("p", { class: "muted small" }, auth.currentUser.email))),
     h("ul", { class: "list card-flat settings" },
+      row("#/bienvenue", "📖", "Guide de Bennoo", "À quoi sert Bennoo et comment s'en servir"),
       row("#/profil", "👤", "Mon profil", "Nom et téléphone"),
       row("#/familles", "👨‍👩‍👧", "Familles et permissions", "Membres, rôles, invitations"),
       row("#/conditions", "🔒", "Confidentialité", "Ce que voient les autres membres"),
@@ -2707,6 +2892,7 @@ document.getElementById("skip")?.addEventListener("click", () => root.querySelec
 
 function show({ node, title, nav = null }) {
   document.body.classList.toggle("with-nav", Boolean(nav));
+  if (!["Introuvable", "Erreur"].includes(title)) insertHelp(node, location.hash.replace(/^#/, "") || "/");
   root.replaceChildren(node, nav ? tabbar(nav) : "");
   document.title = title ? `${title} · Bennoo` : "Bennoo";
   const heading = root.querySelector("h1");
@@ -2751,6 +2937,9 @@ async function route() {
   const pending = sessionStorage.getItem("bennoo:after-login");
   if (pending) { sessionStorage.removeItem("bennoo:after-login"); location.hash = pending; return; }
 
+  // Première connexion sur cet appareil : page de bienvenue qui explique Bennoo.
+  if (!head && !welcomeSeen.get(currentUser.uid)) { location.hash = "#/bienvenue"; return; }
+  if (head === "bienvenue") return render(welcomeScreen());
   if (!head) return render(homeScreen());
   if (head === "familles") return render(familiesScreen());
   if (head === "famille" && a && b === "membre" && parts[3]) return render(memberScreen(a, parts[3]));
