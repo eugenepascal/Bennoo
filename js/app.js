@@ -1033,7 +1033,7 @@ function eventCard(e, familyName, progress = null) {
     h("span", { class: "thumb", "aria-hidden": "true" }, EVENT_ICONS[e.type] ?? "✨", photo(coverOf(e), 160, 160)),
     h("span", { class: "grow" },
       h("span", { class: "title" }, e.title),
-      h("span", { class: "sub" }, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · ")),
+      h("span", { class: "sub" }, [e.startsAt ? shortLongDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" • ")),
       familyName ? h("span", { class: "sub" }, familyName) : null,
       bar ?? h("span", { class: "sub role" }, `${countdownLabel(e.startsAt)} · ${EVENT_ROLES[e.myRole] ?? ""}`),
     ),
@@ -2439,7 +2439,7 @@ async function homeScreen() {
         h("ul", { class: "list task-cards" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null);
   }
 
-  const aside = h("aside", { class: "card activity", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"),
+  const aside = h("aside", { class: "card activity desk-only", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"),
     activity.length ? h("ul", { class: "list" }, activity.map((a) => h("li", {}, h("a", { href: a.href, class: "item" },
       h("span", { class: "act-ico", "aria-hidden": "true" }, a.icon),
       h("span", { class: "grow" }, h("span", { class: "title wrap" }, a.text), h("span", { class: "sub" }, `${a.sub} · ${relTime(a.when)}`))))))
