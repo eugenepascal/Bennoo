@@ -456,3 +456,4 @@ h1, h2 { letter-spacing: -.2px; }
 .onboard .art { aspect-ratio: 5/4; border-radius: 0; clip-path: ellipse(85% 100% at 50% 0%); }
 .onboard h1, .onboard p, .onboard .dots, .onboard .actions { padding: 0 24px; }
 .onboard h1 { color: var(--violet-950); font-size: 1.6rem; }
+@media (min-width: 900px) { html:has(body.with-nav) { background: #f6f3fd; } }
