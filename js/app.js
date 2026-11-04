@@ -668,7 +668,8 @@ function showFormError(form, message) {
 
 /** Désactive le bouton pendant l'envoi pour éviter les doubles soumissions. */
 async function withBusy(button, fn) {
-  const label = button.textContent;
+  // On garde le contenu d'origine (texte ET icône, comme le logo Google) pour le remettre ensuite.
+  const content = [...button.childNodes];
   button.disabled = true;
   button.setAttribute("aria-busy", "true");
   button.textContent = "Patientez…";
@@ -677,7 +678,7 @@ async function withBusy(button, fn) {
   } finally {
     button.disabled = false;
     button.removeAttribute("aria-busy");
-    button.textContent = label;
+    button.replaceChildren(...content);
   }
 }
 
