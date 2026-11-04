@@ -389,3 +389,70 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .event-hero.compact .sub { font-size: .85rem; }
 .orn { width: 78px; height: 78px; opacity: .8; }
 .invitation { padding: 44px 26px; }
+
+/* ═══ Alignement visuel sur les maquettes (04/11/2026) ═══════════════════
+   Fond blanc, cartes à bord fin et ombre très légère, titres violet nuit,
+   photo d'événement en bandeau avec le titre dessous (maquette 7),
+   tête de famille avec photo ronde (maquette 5), accueil épuré (maquette 4). */
+:root { --violet-50: #ffffff; --line: #ece8f6; --shadow: 0 1px 2px rgba(46,16,101,.04), 0 6px 18px rgba(46,16,101,.06); --radius: 16px; }
+body { background: #fff; }
+@media (min-width: 900px) { body.with-nav { background: #f6f3fd; } .with-nav .screen { background: #fff; border-radius: 24px; margin-top: 18px; margin-bottom: 18px; padding: 28px 28px 32px; box-shadow: var(--shadow); } }
+.desk-only { display: none !important; }
+@media (min-width: 900px) { .desk-only { display: revert !important; } div.desk-only { display: flex !important; } input.desk-only { display: block !important; } }
+h1, h2 { letter-spacing: -.2px; }
+.section-head h2, main > section > h2, .home-main h2 { font-size: 1.12rem; }
+.btn-primary { background: linear-gradient(180deg, #6d28d9, #4c1d95); box-shadow: 0 4px 12px rgba(76,29,149,.22); }
+
+/* Accueil */
+.hello { gap: 14px; }
+.hello .search { max-width: 280px; min-height: 42px; }
+.avatar.sq { width: 56px; height: 56px; border-radius: 16px; font-size: 1.2rem; }
+.event-card { padding: 10px; border-radius: 16px; box-shadow: var(--shadow); }
+.event-card .thumb { width: 84px; height: 84px; border-radius: 12px; }
+.event-card .title { font-size: 1rem; }
+.event-card .sub.role { color: var(--violet-700); font-weight: 600; }
+.mini-progress { margin-top: 8px; }
+.mini-progress .bar { height: 10px; background: #ede9fe; }
+.mini-progress .bar span { background: linear-gradient(90deg, #8b5cf6, #6d28d9); }
+.task-cards > li { border: 1px solid var(--line) !important; border-radius: 14px; margin-bottom: 8px; background: #fff; }
+.task-cards > li + li { border-top: 1px solid var(--line); }
+
+/* Famille (maquette 5) */
+.family-head { display: flex; align-items: center; gap: 16px; padding: 4px 0; }
+.family-photo { position: relative; width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex: none; display: grid; place-items: center;
+  background: linear-gradient(135deg, #7c3aed, #4c1d95); color: #fff; font-weight: 800; font-size: 1.5rem; box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--violet-200); }
+.family-photo .photo { position: absolute; inset: 0; }
+.family-head h1 { font-size: 1.35rem; }
+.tabs { background: transparent; padding: 0; gap: 8px; }
+.tabs button, .tabs a { border: 1px solid var(--line); background: #f8f6ff; min-height: 42px; }
+.tabs [aria-selected="true"], .tabs [aria-current="page"] { background: #fff; color: var(--violet-800); border-color: var(--violet-200); box-shadow: 0 2px 6px rgba(46,16,101,.08); }
+.role-owner, .role-admin { color: var(--violet-700) !important; font-weight: 600; }
+.list.card-flat .avatar { width: 48px; height: 48px; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--violet-200); }
+
+/* Événement (maquette 7) */
+.event-head { border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #fff; }
+.event-photo { height: 170px; }
+.event-head.compact .event-photo { height: 70px; }
+.event-title { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.event-title h1 { font-size: 1.3rem; color: var(--violet-950); }
+.event-head.compact .event-title h1 { font-size: 1.1rem; }
+.event-title .grow { flex: 1; min-width: 0; }
+.kpi { box-shadow: none; border-color: var(--line); background: #fcfbff; }
+.kpi.big .v { color: var(--violet-950); font-size: 2rem; }
+.kpi-ring .ring { width: 76px; height: 76px; background: radial-gradient(closest-side, #fcfbff 74%, transparent 76% 100%), conic-gradient(#22a55a calc(var(--p) * 1%), #ede9fe 0); }
+.kpi-ring .ring span { display: none; }
+.kpi-ring strong.v { display: block; font-size: 1.25rem; color: var(--violet-950); }
+.kpi-row .kpi .v { font-size: 1.15rem; color: var(--violet-950); }
+.task-check { accent-color: #22a55a; border-radius: 6px; }
+
+/* Lancement (maquette 1) */
+.btn-gold-ring { border: 2px solid var(--gold-400); box-shadow: 0 0 0 4px rgba(240,195,90,.18), 0 8px 20px rgba(0,0,0,.25); }
+.launch-login { color: #ede9fe; font-size: .95rem; text-align: center; }
+.launch-login a { color: #fff; font-weight: 700; }
+.launch h1 { font-size: 3rem; }
+
+/* Présentation (maquette 1) : photo en haut, bas arrondi en vague */
+.onboard { padding: 0 0 24px; }
+.onboard .art { aspect-ratio: 5/4; border-radius: 0; clip-path: ellipse(85% 100% at 50% 0%); }
+.onboard h1, .onboard p, .onboard .dots, .onboard .actions { padding: 0 24px; }
+.onboard h1 { color: var(--violet-950); font-size: 1.6rem; }

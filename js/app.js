@@ -522,6 +522,12 @@ function parseAmount(input, currency) {
   return value;
 }
 
+/** Montant court pour les cartes de chiffres : « 4 200 000 F » (FCFA) ou « 12 € ». */
+function kpiAmount(minor, currency) {
+  if (currency === "XOF") return `${new Intl.NumberFormat("fr-FR").format(minor)} F`;
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
+}
+
 /** Entier en unités mineures -> « 6 000 000 F CFA » / « 12,50 € ». */
 function formatAmount(minor, currency) {
   const digits = currency === "EUR" ? 2 : 0;
@@ -785,7 +791,9 @@ function tabbar(active) {
   );
 }
 
-const AVATAR_COLORS = ["#6d28d9", "#b7791f", "#0e7490", "#be185d", "#4d7c0f", "#1d4ed8", "#9333ea", "#c2410c"];
+// Tons des maquettes : violets et dorés en dégradé.
+const AVATAR_COLORS = ["linear-gradient(135deg,#7c3aed,#4c1d95)", "linear-gradient(135deg,#d4a23a,#a16207)", "linear-gradient(135deg,#a855f7,#6d28d9)",
+  "linear-gradient(135deg,#9d4edd,#5b21b6)", "linear-gradient(135deg,#c084fc,#7e22ce)", "linear-gradient(135deg,#b45309,#78350f)"];
 function initials(name) {
   const parts = String(name || "?").trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
@@ -853,8 +861,8 @@ function launchScreen() {
       h("p", { class: "tag" }, "Ensemble pour vos moments précieux"),
     ),
     h("div", { class: "actions" },
-      h("a", { href: "#/decouvrir/0", class: "btn btn-primary btn-block" }, "Commencer"),
-      h("a", { href: "#/connexion", class: "btn btn-light btn-block" }, "Se connecter"),
+      h("a", { href: "#/decouvrir/0", class: "btn btn-primary btn-block btn-gold-ring" }, "Commencer"),
+      h("p", { class: "launch-login" }, "Déjà un compte ? ", h("a", { href: "#/connexion" }, "Se connecter")),
       FIREBASE_READY ? null : h("p", { class: "small" }, "Aperçu : la connexion sera activée dès que le projet Firebase sera relié."),
     ),
   );
@@ -1018,7 +1026,7 @@ function verifyScreen(user) {
 function eventCard(e, familyName, progress = null) {
   let bar = null;
   if (progress !== null) {
-    bar = h("span", { class: "mini-progress", role: "img", "aria-label": `Organisation : ${progress} %` }, h("span", { class: "bar" }, h("span", {})), h("span", { class: "pct" }, `${progress}%`));
+    bar = h("span", { class: "mini-progress", role: "img", "aria-label": `Organisation : ${progress} %, ${countdownLabel(e.startsAt)}` }, h("span", { class: "bar" }, h("span", {})), h("span", { class: "pct" }, `${progress}%`));
     bar.querySelector(".bar span").style.width = `${progress}%`;
   }
   return h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}`, class: "event-card", dataset: { search: [e.title, e.city, EVENT_TYPES[e.type], familyName].filter(Boolean).join(" ").toLowerCase() } },
@@ -1026,9 +1034,8 @@ function eventCard(e, familyName, progress = null) {
     h("span", { class: "grow" },
       h("span", { class: "title" }, e.title),
       h("span", { class: "sub" }, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · ")),
-      h("span", {}, h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)), " ",
-        h("span", { class: "chip chip-violet" }, EVENT_ROLES[e.myRole] ?? ""), familyName ? h("span", { class: "sub" }, ` · ${familyName}`) : null),
-      bar,
+      familyName ? h("span", { class: "sub" }, familyName) : null,
+      bar ?? h("span", { class: "sub role" }, `${countdownLabel(e.startsAt)} · ${EVENT_ROLES[e.myRole] ?? ""}`),
     ),
     h("span", { class: "chev", "aria-hidden": "true" }, "›"),
   );
@@ -1103,7 +1110,7 @@ async function familyScreen(fid, tab = "membres") {
     body = h("div", { class: "form" },
       h("ul", { class: "list card-flat" }, members.map((m) => h("li", {},
         h("a", { href: `#/famille/${enc(fid)}/membre/${enc(m.uid)}`, class: "item" }, avatar(m.displayName),
-          h("span", { class: "grow" }, h("span", { class: "title" }, m.displayName + (m.uid === myUid ? " (vous)" : "")), h("span", { class: "sub" }, FAMILY_ROLES[m.role])),
+          h("span", { class: "grow" }, h("span", { class: "title" }, m.displayName + (m.uid === myUid ? " (vous)" : "")), h("span", { class: `sub role-${m.role}` }, FAMILY_ROLES[m.role])),
           h("span", { class: "chev", "aria-hidden": "true" }, "›"))))),
       isAdmin
         ? h("a", { href: `#/famille/${enc(fid)}/inviter`, class: "btn btn-primary btn-block" }, "+ Inviter un membre")
@@ -1111,10 +1118,9 @@ async function familyScreen(fid, tab = "membres") {
   }
 
   const node = screen(
-    h("section", { class: "family-hero" },
-      photoBackground(h("div", { class: "band" }), "reunion", 1000, 360, "linear-gradient(180deg, rgba(46,16,101,.1), rgba(46,16,101,.45))"),
-      h("div", { class: "id" }, avatar(family.name),
-        h("div", {}, h("h1", {}, family.name), h("p", { class: "muted small" }, `${members.length} membre${members.length > 1 ? "s" : ""} · ${famEvents.length} événement${famEvents.length > 1 ? "s" : ""}`)))),
+    h("section", { class: "family-head" },
+      h("span", { class: "family-photo", "aria-hidden": "true" }, initials(family.name), photo("reunion", 200, 200)),
+      h("div", {}, h("h1", {}, family.name), h("p", { class: "muted" }, `${members.length} membre${members.length > 1 ? "s" : ""} • ${famEvents.length} événement${famEvents.length > 1 ? "s" : ""}`))),
     current === "inviter" ? header("Inviter un membre", `#/famille/${enc(fid)}/membres`) : tabs,
     body,
   );
@@ -1529,6 +1535,8 @@ function checklistFor(event) {
 function subHeader(title, backHref) {
   return h("div", { class: "screen-head sub-head" }, backHref ? h("a", { href: backHref, class: "back", "aria-label": "Retour" }, "‹") : null, h("h2", {}, title));
 }
+/** « 15 février 2025 » (maquettes), sans le jour de la semaine. */
+const shortLongDate = (d) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(d);
 const shortDate = (d) => (d ? new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d) : null);
 const dateInput = (d) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "");
 const fromDateInput = (s) => { if (!s) return null; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d, 10, 0, 0); };
@@ -1598,12 +1606,12 @@ async function eventOverview(ctx) {
       h("div", { class: "kpi big" }, h("span", { class: "v" }, n === null ? "—" : n > 0 ? `J-${n}` : n === 0 ? "Jour J" : "Passé"),
         h("span", { class: "l" }, n === null ? "Date à fixer" : n > 0 ? "avant le grand jour" : n === 0 ? "c'est aujourd'hui !" : "événement passé")),
       h("div", { class: "kpi kpi-ring" }, ring(progress, "de l'organisation"),
-        h("span", { class: "l" }, tasks.length ? "Organisation (tâches terminées)" : "Aucune tâche pour l'instant"))),
+        h("span", {}, h("strong", { class: "v" }, `${progress}%`), h("span", { class: "l" }, tasks.length ? "Organisation" : "Aucune tâche")))),
     h("div", { class: "kpi-row four" },
       h("div", { class: "kpi" }, h("span", { class: "v" }, g ? String(g.attending) : "—"), h("span", { class: "l" }, g ? "Invités confirmés" : "Invités confirmés (aucune liste)")),
       h("div", { class: "kpi" }, h("span", { class: "v" }, String(left)), h("span", { class: "l" }, "Tâches restantes")),
-      h("div", { class: "kpi" }, h("span", { class: "v sm" }, event.budgetPlanned ? formatAmount(event.budgetPlanned, event.currency) : "—"), h("span", { class: "l" }, "Budget global")),
-      h("div", { class: "kpi" }, h("span", { class: "v sm" }, b ? formatAmount(b.confirmed, event.currency) : "—"), h("span", { class: "l" }, b ? plural(b.contributors, "contribution") + " confirmée" + (b.contributors > 1 ? "s" : "") : "Contributions"))),
+      h("div", { class: "kpi" }, h("span", { class: "v sm" }, event.budgetPlanned ? kpiAmount(event.budgetPlanned, event.currency) : "—"), h("span", { class: "l" }, "Budget global")),
+      h("div", { class: "kpi" }, h("span", { class: "v" }, b ? String(b.contributors) : "—"), h("span", { class: "l" }, b ? `Contributions · ${kpiAmount(b.confirmed, event.currency)}` : "Contributions"))),
     h("section", { class: "card" },
       h("div", { class: "section-head" }, h("h2", {}, "Prochaines tâches"), h("a", { href: `${base}/taches`, class: "small" }, "Tout voir")),
       next.length ? h("ul", { class: "list" }, next.map((t) => taskItem(ctx, t, tasks))) :
@@ -2305,11 +2313,13 @@ async function eventScreen(fid, eid, tab, sub, extra) {
 
   const node = screen(
     h("a", { href: `#/famille/${enc(fid)}/evenements`, class: "back", "aria-label": `Retour à ${family.name}` }, "‹"),
-    photoBackground(h("section", { class: `event-hero${active === "apercu" && !tab ? "" : " compact"}` },
-      h("span", { class: "type" }, EVENT_ICONS[event.type], " ", EVENT_TYPES[event.type]), " ",
-      h("span", { class: "type" }, `Votre rôle : ${EVENT_ROLES[event.myRole]}`),
-      h("h1", {}, event.title),
-      h("p", { class: "sub" }, [event.startsAt ? formatDate(event.startsAt) : "Date à fixer", event.city].filter(Boolean).join(" · "))), coverOf(event), 1200, 520),
+    h("section", { class: `event-head${active === "apercu" && !tab ? "" : " compact"}` },
+      photoBackground(h("div", { class: "event-photo", "aria-hidden": "true" }), coverOf(event), 1200, 500, "linear-gradient(180deg, rgba(46,16,101,0), rgba(46,16,101,.15))"),
+      h("div", { class: "event-title" },
+        h("div", { class: "grow" },
+          h("h1", {}, event.title),
+          h("p", { class: "muted" }, [event.startsAt ? shortLongDate(event.startsAt) : "Date à fixer", event.city].filter(Boolean).join(" • "))),
+        h("span", { class: "chip chip-violet" }, EVENT_ROLES[event.myRole]))),
     tabs, body,
   );
   return { node, title: event.title, nav: "home" };
@@ -2401,12 +2411,12 @@ async function homeScreen() {
   const activity = await recentActivity(stats);
   const next = upcoming[0] ? byId[upcoming[0].id] : null;
 
-  const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? null));
+  const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? 0));
   const listBox = h("div", {}, upcoming.length ? cards(upcoming)
     : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement à venir."), h("span", {}, families.length ? "Créez-en un : vous en serez l'organisateur." : "Commencez par créer votre famille.")));
   const pastBox = past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null;
 
-  const search = events.length ? h("input", { type: "search", class: "input search", placeholder: "Rechercher un événement…", "aria-label": "Rechercher un événement" }) : null;
+  const search = events.length ? h("input", { type: "search", class: "input search desk-only", placeholder: "Rechercher…", "aria-label": "Rechercher un événement" }) : null;
   search?.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
     for (const c of document.querySelectorAll(".event-card")) c.hidden = q !== "" && !c.dataset.search.includes(q);
@@ -2416,23 +2426,17 @@ async function homeScreen() {
   if (next) {
     const { e, summary, left, progress } = next;
     const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
-    const head = photoBackground(h("a", { href: base, class: "spot-head" },
-      h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)),
-      h("strong", {}, e.title), h("span", {}, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · "))), coverOf(e), 900, 400);
-    const bar = h("div", { class: "bar" }, h("span", {}));
-    bar.firstChild.style.width = `${progress ?? 0}%`;
+    // Version ordinateur (maquette 14) : chiffres clés et prochaines tâches de l'événement à venir.
     const kpi = (v, l) => h("div", { class: "kpi" }, h("span", { class: "v sm" }, v), h("span", { class: "l" }, l));
     const nextTasks = next.tasks.filter((t) => t.status !== "done").slice(0, 3);
-    spotlight = h("section", { class: "card spotlight" }, head,
-      h("div", { class: "form" },
-        h("div", {}, bar, h("p", { class: "muted small" }, progress === null ? "Aucune tâche pour l'instant" : `${progress} % de l'organisation terminée`)),
-        h("div", { class: "kpi-row four" },
-          kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
-          kpi(String(left), "Tâches restantes"),
-          kpi(e.budgetPlanned ? formatAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
-          kpi(summary.budget ? formatAmount(summary.budget.confirmed, e.currency) : "—", "Contributions")),
-        nextTasks.length ? h("div", {}, h("h3", {}, "Prochaines tâches"),
-          h("ul", { class: "list" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null));
+    spotlight = h("div", { class: "form desk-only" },
+      h("div", { class: "kpi-row four" },
+        kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
+        kpi(String(left), "Tâches restantes"),
+        kpi(e.budgetPlanned ? kpiAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
+        kpi(summary.budget ? String(summary.budget.contributors) : "—", "Contributions")),
+      nextTasks.length ? h("section", {}, h("h2", {}, "Prochaines tâches"),
+        h("ul", { class: "list task-cards" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null);
   }
 
   const aside = h("aside", { class: "card activity", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"),
@@ -2443,9 +2447,9 @@ async function homeScreen() {
 
   const node = screen(
     h("div", { class: "hello" },
-      avatar(name),
-      h("div", { class: "grow" }, h("h1", {}, `Bonjour ${firstName(name)} 👋`), h("p", { class: "muted" }, "Ravi de vous revoir !"))),
-    search,
+      avatar(name, "sq"),
+      h("div", { class: "grow" }, h("h1", {}, `Bonjour ${firstName(name)} 👋`), h("p", { class: "muted" }, "Ravi de vous revoir !")),
+      search),
     families.length === 0
       ? h("section", { class: "card" },
         h("h2", {}, "Créez votre famille"),
@@ -2454,11 +2458,11 @@ async function homeScreen() {
       : null,
     h("div", { class: "home-grid" },
       h("div", { class: "home-main" },
-        spotlight,
         h("section", {},
           h("div", { class: "section-head" }, h("h2", {}, "Mes événements"),
             families.length ? h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer") : null),
           listBox),
+        spotlight,
         pastBox),
       events.length ? aside : null),
   );
