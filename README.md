@@ -94,6 +94,8 @@ dans les maquettes. Sur ordinateur, elle devient une barre latérale violette (m
 | **Comités** (nom et membres) | Participants de l'événement ; onglet Comités de la famille |
 | Partage d'une invitation : **QR code**, lien, WhatsApp, e-mail, SMS, « Plus » | Invités → Partager |
 | Carton d'invitation avec ornements dorés | Invités → Carton |
+| **Aide intégrée** : encadré repliable « À quoi sert cette page ? » en haut de chaque page (textes dans `HELP`, js/app.js) ; choix replié/ouvert mémorisé sur l'appareil | Toutes les pages |
+| **Page de bienvenue** : but de Bennoo, 5 étapes, vie privée ; affichée une fois après la première connexion sur l'appareil, puis depuis Plus → Guide de Bennoo | `#/bienvenue` |
 | Visuel revu le 04/11/2026 : fond blanc, cartes fines, accueil comme la maquette 4 (photo + barre d'avancement, activité récente sur ordinateur seulement), bandeau photo de l'événement avec le titre dessous (maquette 7), tête de famille à photo ronde (maquette 5), chiffres courts « 4 200 000 F », anneau du budget coloré par provenance, lancement « Commencer » + « Déjà un compte ? Se connecter » | Partout |
 
 ### Types d'événements
