@@ -1847,7 +1847,8 @@ function budgetCard(event, totals, showDetail, origins = null) {
     : null;
   return h("section", { class: "card form" },
     h("h2", {}, "Budget global"),
-    budget ? donut(pct(totals.confirmed, budget), formatAmount(totals.confirmed, cur), `/ ${formatAmount(budget, cur)}`)
+    budget ? donut(pct(totals.confirmed, budget), kpiAmount(totals.confirmed, cur), `/ ${kpiAmount(budget, cur)}`,
+      origins ? Object.entries(ORIGINS).filter(([k]) => origins[k]).map(([k, [, color]]) => [color, (origins[k] / budget) * 100]) : null)
       : h("p", { class: "muted small" }, "Budget non défini : l'organisateur peut le fixer dans « Modifier »."),
     budget ? h("p", { class: "muted small center" }, `${pct(totals.confirmed, budget)} % financé par les contributions confirmées`) : null,
     originLines,
@@ -2353,10 +2354,16 @@ function mapBlock(getPlace) {
   return box;
 }
 
-function donut(percent, big, small) {
+/** Anneau (planche 4) : un segment de couleur par provenance si elles sont connues. */
+function donut(percent, big, small, segments = null) {
   const el = h("div", { class: "donut", role: "img", "aria-label": `${percent} %` },
     h("div", { class: "donut-in" }, h("strong", {}, big), small ? h("span", {}, small) : null, h("b", {}, `${percent}%`)));
   el.style.setProperty("--p", percent);
+  if (segments && segments.length) {
+    let at = 0;
+    const stops = segments.map(([color, part]) => { const from = at; at = Math.min(100, at + part); return `${color} ${from}% ${at}%`; });
+    el.style.background = `conic-gradient(${stops.join(", ")}, #ede9fe ${at}% 100%)`;
+  }
   return el;
 }
 
