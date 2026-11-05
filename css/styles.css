@@ -486,3 +486,9 @@ mark.todo { background: var(--gold-200); color: #6b4106; padding: 0 4px; border-
 details.archived summary { cursor: pointer; font-weight: 700; color: var(--violet-800); padding: 6px 0; }
 details.archived[open] summary { margin-bottom: 8px; }
 .settings a.item.danger .title { color: var(--red); }
+/* Corrections visuelles du 05/11/2026 (vue téléphone) */
+.participant .controls { flex-wrap: wrap; }
+.participant .controls .btn { flex: 1 1 auto; }
+.blockers li { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0; }
+.blockers li p { font-weight: 600; color: var(--violet-950); }
+.help-box summary { font-size: .88rem; }

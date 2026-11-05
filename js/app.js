@@ -2829,9 +2829,16 @@ function helpKeyFor(path) {
   return { taches: "my-tasks", budget: "my-budget", plus: "settings", profil: "profile", rejoindre: "join", rsvp: "rsvp" }[head] ?? null;
 }
 
+// Aide ouverte à la première visite de la page, repliée ensuite (sauf si la personne la rouvre).
 const helpStore = {
-  closed(key) { try { return localStorage.getItem(`bennoo:help:${key}`) === "closed"; } catch { return false; } },
-  set(key, closed) { try { closed ? localStorage.setItem(`bennoo:help:${key}`, "closed") : localStorage.removeItem(`bennoo:help:${key}`); } catch { /* stockage indisponible */ } },
+  closed(key) {
+    try {
+      const v = localStorage.getItem(`bennoo:help:${key}`);
+      if (v === null) { localStorage.setItem(`bennoo:help:${key}`, "seen"); return false; }
+      return v !== "open";
+    } catch { return false; }
+  },
+  set(key, closed) { try { localStorage.setItem(`bennoo:help:${key}`, closed ? "closed" : "open"); } catch { /* stockage indisponible */ } },
   reset() { try { Object.keys(localStorage).filter((k) => k.startsWith("bennoo:help:")).forEach((k) => localStorage.removeItem(k)); } catch { /* idem */ } },
 };
 
@@ -2840,7 +2847,7 @@ function helpBox(key) {
   if (!entry) return null;
   const [title, paragraphs] = entry;
   const box = h("details", { class: "help-box", open: !helpStore.closed(key) },
-    h("summary", {}, h("span", { class: "help-ico", "aria-hidden": "true" }, "i"), h("span", {}, `À quoi sert cette page ? · ${title}`)),
+    h("summary", { "aria-label": `À quoi sert cette page ? ${title}` }, h("span", { class: "help-ico", "aria-hidden": "true" }, "i"), h("span", {}, `${title} : à quoi sert cette page ?`)),
     h("div", { class: "help-body" }, paragraphs.map((t) => h("p", {}, t))));
   box.addEventListener("toggle", () => helpStore.set(key, !box.open));
   return box;
@@ -2998,7 +3005,7 @@ function legalScreen(which = "cgu") {
   const key = LEGAL[which] ? which : "cgu";
   const [title, body] = LEGAL[key];
   const tabs = h("div", { class: "tabs", role: "tablist" }, Object.entries(LEGAL).map(([k, [t]]) =>
-    h("a", { href: `#/conditions/${k}`, role: "tab", "aria-selected": String(k === key) }, t.replace("Politique de ", "").replace(/^c/, "C"))));
+    h("a", { href: `#/conditions/${k}`, role: "tab", "aria-selected": String(k === key), "aria-label": t }, { cgu: "Conditions", confidentialite: "Confidentialité", mentions: "Mentions" }[k])));
   const node = (currentUser ? screen : bare)(header(title, currentUser ? "#/plus" : "#/"),
     h("p", { class: "alert alert-info" }, "Version de travail de la phase de test, à faire valider juridiquement avant l'ouverture au public. Les mentions surlignées sont à compléter."),
     tabs, h("section", { class: "card form legal" }, body()));
@@ -3083,7 +3090,7 @@ async function deleteAccountScreen() {
   if (plan.blockers.length) {
     body = h("section", { class: "card form" }, h("h2", {}, "Avant de supprimer votre compte"),
       h("p", { class: "muted" }, "Pour que vos familles et vos événements gardent un responsable, il reste à faire :"),
-      h("ul", { class: "list" }, plan.blockers.map((b) => h("li", { class: "item" }, h("span", { class: "grow" }, h("span", { class: "title wrap" }, b.text)), h("a", { href: b.href, class: "btn btn-sm" }, b.action)))),
+      h("ul", { class: "list blockers" }, plan.blockers.map((b) => h("li", {}, h("p", {}, b.text), h("a", { href: b.href, class: "btn btn-sm" }, b.action)))),
       h("p", { class: "muted small" }, "Revenez ensuite sur cette page."));
   } else {
     const form = h("form", { class: "card form", novalidate: true },
