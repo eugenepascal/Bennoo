@@ -203,6 +203,8 @@ const data = (() => {
     const s = await fam(fid).collection("members").get();
     return s.docs.map((d) => d.data()).sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
   }
+  const renameFamily = (fid, name) => fam(fid).update({ name });
+  const setEventStatus = (fid, eid, status) => ev(fid, eid).update({ status, updatedAt: serverTimestamp() });
   const setFamilyRole = (fid, memberUid, role) => fam(fid).collection("members").doc(memberUid).update({ role });
   const removeFamilyMember = (fid, memberUid) => fam(fid).collection("members").doc(memberUid).delete();
 
@@ -277,7 +279,7 @@ const data = (() => {
     return s.exists ? s.data().displayName : null;
   }
 
-  return { getProfile, saveProfile, createFamily, listMyFamilies, getFamily, listFamilyMembers, setFamilyRole, removeFamilyMember,
+  return { renameFamily, setEventStatus, getProfile, saveProfile, createFamily, listMyFamilies, getFamily, listFamilyMembers, setFamilyRole, removeFamilyMember,
     createInvite, listInvites, revokeInvite, getInvite, isFamilyMember, joinFamily, createEvent, updateEvent, listMyEvents,
     getEvent, listParticipants, addParticipant, setParticipantRole, removeParticipant, getMyFamilyDisplayName };
 })();
@@ -1155,7 +1157,7 @@ async function familyScreen(fid, tab = "membres") {
           h("span", { class: "grow" }, h("span", { class: "title" }, m.displayName + (m.uid === myUid ? " (vous)" : "")), h("span", { class: `sub role-${m.role}` }, FAMILY_ROLES[m.role])),
           h("span", { class: "chev", "aria-hidden": "true" }, "›"))))),
       isAdmin
-        ? h("a", { href: `#/famille/${enc(fid)}/inviter`, class: "btn btn-primary btn-block" }, "+ Inviter un membre")
+        ? h("div", { class: "form" }, h("a", { href: `#/famille/${enc(fid)}/inviter`, class: "btn btn-primary btn-block" }, "+ Inviter un membre"), renameFamilyButton(fid, family.name))
         : h("p", { class: "muted small" }, "Pour inviter un proche, demandez un lien à un administrateur de la famille."));
   }
 
@@ -1211,6 +1213,16 @@ function roleSelect(label, roles, current, onChange) {
   return select;
 }
 
+function renameFamilyButton(fid, current) {
+  const b = h("button", { type: "button", class: "btn btn-block" }, "Renommer la famille");
+  b.addEventListener("click", () => withBusy(b, async () => {
+    const name = prompt("Nouveau nom de la famille :", current);
+    if (name === null) return;
+    try { await data.renameFamily(fid, cleanName(name)); toast("Famille renommée"); window.dispatchEvent(new Event("hashchange")); } catch (err) { toast(errMsg(err)); }
+  }));
+  return b;
+}
+
 async function memberScreen(fid, uid) {
   const family = await data.getFamily(fid);
   if (!family) return notFoundScreen();
@@ -1234,7 +1246,17 @@ async function memberScreen(fid, uid) {
           await data.setFamilyRole(fid, uid, role); toast(`${m.displayName} : ${FAMILY_ROLES[role].toLowerCase()}`);
         })),
       remove);
-  } else if (isMe && m.role !== "owner") {
+  }
+  if (family.myRole === "owner" && !isMe) {
+    const give = h("button", { type: "button", class: "btn btn-block" }, `Transmettre la famille à ${m.displayName}`);
+    give.addEventListener("click", () => withBusy(give, async () => {
+      if (!confirm(`${m.displayName} deviendra propriétaire de « ${family.name} » et vous deviendrez administrateur. Continuer ?`)) return;
+      try { await transferOwnership(fid, uid); toast(`${m.displayName} est maintenant propriétaire`); location.hash = `#/famille/${enc(fid)}/membres`; } catch (err) { toast(errMsg(err)); }
+    }));
+    actions = h("div", { class: "form" }, actions, give,
+      h("p", { class: "muted small" }, "Transmettre la famille est nécessaire avant de supprimer votre compte si d'autres membres restent."));
+  }
+  if (isMe && m.role !== "owner") {
     const leave = h("button", { type: "button", class: "btn btn-block" }, "Quitter la famille");
     leave.addEventListener("click", () => withBusy(leave, async () => {
       if (!confirm(`Quitter ${family.name} ?`)) return;
@@ -1472,9 +1494,20 @@ async function participantsPanel(fid, eid, participants, isOrganizer, myUid) {
       add = form;
     }
   }
+  const me = participants.find((p) => p.uid === myUid);
+  const otherOrganizer = participants.find((p) => p.uid !== myUid && p.role === "organizer");
+  let leave = null;
+  if (me && (me.role !== "organizer" || otherOrganizer)) {
+    leave = h("button", { type: "button", class: "btn btn-block" }, "Quitter l'événement");
+    leave.addEventListener("click", () => withBusy(leave, async () => {
+      if (!confirm(me.role === "organizer" ? `Quitter l'événement ? ${otherOrganizer.displayName} reste organisateur.` : "Quitter l'événement ? Vous ne le verrez plus.")) return;
+      try { await leaveEvent(fid, eid, me.role === "organizer" ? otherOrganizer.uid : null); toast("Vous avez quitté l'événement"); location.hash = "#/"; } catch (err) { toast(errMsg(err)); }
+    }));
+  }
   return h("div", { class: "form" },
     h("p", { class: "muted small" }, "Seuls les participants voient cet événement, même au sein de la famille."),
-    list, add);
+    list, add, leave,
+    me?.role === "organizer" && !otherOrganizer && participants.length > 1 ? h("p", { class: "muted small" }, "Pour quitter l'événement, nommez d'abord un autre organisateur.") : null);
 }
 
 function editEventForm(fid, eid, e, base) {
@@ -1616,6 +1649,16 @@ function ring(percent, label) {
   return el;
 }
 
+function archiveButton(ctx) {
+  const archived = ctx.event.status === "archived";
+  const b = h("button", { type: "button", class: "btn btn-sm" }, archived ? "Réactiver" : "Archiver");
+  b.addEventListener("click", () => withBusy(b, async () => {
+    if (!archived && !confirm("Archiver l'événement ? Il passera dans « Événements archivés » sur l'accueil ; vous pourrez le réactiver.")) return;
+    try { await data.setEventStatus(ctx.fid, ctx.eid, archived ? "active" : "archived"); toast(archived ? "Événement réactivé" : "Événement archivé"); reload(); } catch (err) { toast(errMsg(err)); }
+  }));
+  return b;
+}
+
 async function eventOverview(ctx) {
   const { fid, eid, event, family, isOrganizer, isManager, base } = ctx;
   const tasks = await orga.listTasks(fid, eid);
@@ -1659,7 +1702,7 @@ async function eventOverview(ctx) {
       next.length ? h("ul", { class: "list" }, next.map((t) => taskItem(ctx, t, tasks))) :
         h("p", { class: "muted small" }, tasks.length ? "Toutes les tâches sont terminées. Bravo !" : "Aucune tâche. Ouvrez l'onglet Tâches pour commencer.")),
     h("section", { class: "card" }, h("div", { class: "section-head" }, h("h2", {}, "Informations"),
-      isOrganizer ? h("a", { href: `${base}/modifier`, class: "btn btn-sm" }, "Modifier") : null),
+      isOrganizer ? h("span", { class: "row-actions" }, archiveButton(ctx), h("a", { href: `${base}/modifier`, class: "btn btn-sm" }, "Modifier")) : null),
     h("dl", { class: "facts" },
       h("dt", {}, "Date"), h("dd", {}, event.startsAt ? `${formatDate(event.startsAt)} à ${event.startsAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "À fixer"),
       h("dt", {}, "Lieu"), h("dd", {}, [event.venue, event.city].filter(Boolean).join(", ") || "À préciser"),
@@ -2452,17 +2495,21 @@ async function homeScreen() {
   const [profile, families, events] = await Promise.all([data.getProfile(), data.listMyFamilies(), data.listMyEvents()]);
   const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
   const famName = Object.fromEntries(families.map((f) => [f.id, f.name]));
-  const upcoming = events.filter((e) => !e.startsAt || daysUntil(e.startsAt) >= 0);
-  const past = events.filter((e) => e.startsAt && daysUntil(e.startsAt) < 0).reverse();
+  const archivedList = events.filter((e) => e.status === "archived");
+  const live = events.filter((e) => e.status !== "archived");
+  const upcoming = live.filter((e) => !e.startsAt || daysUntil(e.startsAt) >= 0);
+  const past = live.filter((e) => e.startsAt && daysUntil(e.startsAt) < 0).reverse();
   const showFamily = families.length > 1;
   const stats = await Promise.all(events.map(eventStats));
   const byId = Object.fromEntries(stats.map((x) => [x.e.id, x]));
-  const next = upcoming[0] ? byId[upcoming[0].id] : null;
+  const next = upcoming[0] ? byId[upcoming[0].id] : null; // le prochain événement non archivé
 
   const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? 0));
   const listBox = h("div", {}, upcoming.length ? cards(upcoming)
     : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement à venir."), h("span", {}, families.length ? "Créez-en un : vous en serez l'organisateur." : "Commencez par créer votre famille.")));
-  const pastBox = past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null;
+  const pastBox = past.length || archivedList.length ? h("div", { class: "form" },
+    past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null,
+    archivedList.length ? h("details", { class: "archived" }, h("summary", {}, `Événements archivés (${archivedList.length})`), h("div", {}, cards(archivedList))) : null) : null;
 
   const search = events.length ? h("input", { type: "search", class: "input search desk-only", placeholder: "Rechercher…", "aria-label": "Rechercher un événement" }) : null;
   search?.addEventListener("input", () => {
@@ -2856,6 +2903,221 @@ async function welcomeScreen() {
   return { node, title: "Bienvenue" };
 }
 
+/* ---------- Étape 5 : application installable, pages légales, suppression de compte ---------- */
+
+// ─── Installation sur l'écran d'accueil (PWA) ───────────────────────────
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; });
+window.addEventListener("appinstalled", () => { installPrompt = null; toast("Bennoo est installé sur cet appareil"); });
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch((err) => console.warn("Service worker non enregistré :", err)));
+}
+const isInstalled = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function installScreen() {
+  const steps = (items) => h("ol", { class: "install-steps" }, items.map((t) => h("li", {}, t)));
+  let main;
+  if (isInstalled()) {
+    main = h("section", { class: "card form" }, h("h2", {}, "✅ Bennoo est déjà installé"), h("p", { class: "muted" }, "Vous utilisez l'application installée : elle s'ouvre depuis l'icône Bennoo de votre écran d'accueil."));
+  } else if (installPrompt) {
+    const b = h("button", { type: "button", class: "btn btn-primary btn-block" }, "Installer Bennoo");
+    b.addEventListener("click", async () => {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      installPrompt = null;
+      toast(outcome === "accepted" ? "Installation en cours…" : "Installation annulée");
+    });
+    main = h("section", { class: "card form" }, h("h2", {}, "Installer en un clic"), h("p", { class: "muted" }, "Votre navigateur peut ajouter Bennoo à votre écran d'accueil."), b);
+  } else if (isIOS()) {
+    main = h("section", { class: "card form" }, h("h2", {}, "Sur iPhone ou iPad (Safari)"),
+      steps(["Ouvrez Bennoo dans Safari (pas dans WhatsApp ni Instagram).", "Touchez le bouton Partager (le carré avec une flèche vers le haut), en bas de l'écran.",
+        "Faites défiler et choisissez « Sur l'écran d'accueil ».", "Touchez « Ajouter » : l'icône Bennoo apparaît avec vos applications."]));
+  } else {
+    main = h("section", { class: "card form" },
+      h("h2", {}, "Sur Android (Chrome)"), steps(["Touchez le menu ⋮ en haut à droite.", "Choisissez « Installer l'application » (ou « Ajouter à l'écran d'accueil »).", "Confirmez : l'icône Bennoo apparaît avec vos applications."]),
+      h("h2", {}, "Sur ordinateur (Chrome ou Edge)"), steps(["Cliquez sur l'icône d'installation à droite de la barre d'adresse (un écran avec une flèche).", "Confirmez « Installer »."]));
+  }
+  const node = screen(header("Installer l'application", "#/plus"),
+    h("section", { class: "card install-hero" }, h("img", { src: "images/icon-192.png", alt: "", width: 72, height: 72 }),
+      h("div", {}, h("h2", {}, "Bennoo sur votre écran d'accueil"), h("p", { class: "muted" }, "Une icône comme une vraie application, en plein écran, qui s'ouvre vite même avec un réseau faible. Rien à télécharger depuis un magasin d'applications."))),
+    main,
+    h("p", { class: "muted small" }, "Vos données restent en ligne et synchronisées : vous retrouvez les mêmes informations sur le téléphone et l'ordinateur."));
+  return { node, title: "Installer", nav: "more" };
+}
+
+// ─── Pages légales (version de travail, à faire valider) ─────────────────
+const TODO = (label) => h("mark", { class: "todo" }, `[à compléter : ${label}]`);
+const LEGAL = {
+  cgu: ["Conditions d'utilisation", () => [
+    h("p", { class: "muted small" }, "Version du 5 novembre 2026 — phase de test."),
+    h("h2", {}, "1. Objet"), h("p", {}, "Bennoo est une application web qui aide les familles à organiser ensemble leurs événements (mariages, baptêmes, communions, anniversaires, cérémonies religieuses ou traditionnelles, réunions de famille) : tâches, budget, contributions, invités. Les présentes conditions encadrent son utilisation."),
+    h("h2", {}, "2. Accès"), h("p", {}, "L'accès est gratuit pendant la phase de test. Il nécessite un compte, créé avec une adresse email ou un compte Google. Les invités qui reçoivent un lien de réponse n'ont pas besoin de compte. L'utilisation est réservée aux personnes de 16 ans et plus, ou plus jeunes avec l'accord d'un parent."),
+    h("h2", {}, "3. Votre compte"), h("p", {}, "Vous êtes responsable de la confidentialité de votre mot de passe et des actions faites avec votre compte. Vous pouvez modifier votre profil et supprimer votre compte à tout moment depuis Plus → Supprimer mon compte."),
+    h("h2", {}, "4. Familles, rôles et contenus"), h("p", {}, "Chaque famille et chaque événement sont gérés par leurs membres selon leurs rôles (propriétaire, administrateur, organisateur, trésorier, membre). Vous êtes responsable des informations que vous ajoutez (noms, téléphones d'invités, montants…) et vous vous engagez à n'y mettre que des informations exactes, et des données de tiers avec leur accord. Tout contenu illicite, injurieux ou portant atteinte à la vie privée est interdit."),
+    h("h2", {}, "5. Pas de paiement"), h("p", {}, "Bennoo ne traite aucun paiement. Les contributions sont déclarées par les membres et confirmées par le trésorier ; les échanges d'argent se font en dehors de l'application, sous la seule responsabilité des personnes concernées."),
+    h("h2", {}, "6. Disponibilité"), h("p", {}, "Le service est fourni « en l'état » pendant la phase de test, sans garantie de disponibilité permanente. Pensez à garder vos informations importantes (contrats, reçus) par ailleurs."),
+    h("h2", {}, "7. Suspension"), h("p", {}, "En cas de non-respect de ces conditions, l'éditeur peut suspendre un compte, après en avoir informé la personne sauf urgence."),
+    h("h2", {}, "8. Modification et droit applicable"), h("p", {}, "Ces conditions peuvent évoluer ; la date de version est indiquée en haut. Droit applicable et juridiction compétente : ", TODO("droit sénégalais ou français, à préciser"), "."),
+    h("h2", {}, "9. Contact"), h("p", {}, "Pour toute question : ", TODO("adresse email de contact"), "."),
+  ]],
+  confidentialite: ["Politique de confidentialité", () => [
+    h("p", { class: "muted small" }, "Version du 5 novembre 2026 — phase de test."),
+    h("h2", {}, "Responsable du traitement"), h("p", {}, TODO("nom de la personne ou de la société qui édite Bennoo, adresse, email"), "."),
+    h("h2", {}, "Données collectées"),
+    h("ul", {},
+      h("li", {}, "Compte : adresse email, nom affiché, et le fait que l'email est vérifié (géré par Firebase Authentication ; les mots de passe ne sont jamais visibles)."),
+      h("li", {}, "Profil : téléphone, facultatif, visible de vous seul."),
+      h("li", {}, "Familles et événements : noms, rôles, dates, lieux, tâches, dépenses, contributions (montant, provenance, statut), comités."),
+      h("li", {}, "Invités : nom du foyer, nombre de places, téléphone facultatif, réponse et petit mot.")),
+    h("h2", {}, "Pourquoi"), h("p", {}, "Uniquement pour faire fonctionner l'application : afficher à chaque membre ce que son rôle lui permet de voir, calculer l'avancement et les totaux, envoyer les liens d'invitation. Aucune publicité, aucune revente, aucun profilage. Base légale : l'exécution du service que vous demandez."),
+    h("h2", {}, "Qui voit vos données"),
+    h("ul", {},
+      h("li", {}, "Un événement n'est visible que de ses participants ; un simple membre ne voit que les totaux du budget ; une contribution anonyme n'est nominative que pour le contributeur et le trésorier ; la liste des invités est réservée aux organisateurs."),
+      h("li", {}, "Hébergement : Google Firebase (Google Ireland Ltd), base de données dans une région européenne. Site : GitHub Pages (GitHub Inc.)."),
+      h("li", {}, "Services chargés par votre navigateur : photos d'illustration (Unsplash), carte du lieu (Google Maps, seulement si vous cliquez), polices (Google Fonts). Ils voient votre adresse IP, comme tout site web.")),
+    h("h2", {}, "Durée de conservation"), h("p", {}, "Tant que votre compte existe. À la suppression du compte, votre profil, vos appartenances et vos participations sont effacés ; votre nom est remplacé par « Compte supprimé » là où il doit rester pour la cohérence d'une famille ou d'un événement (par exemple une contribution confirmée dans les comptes du trésorier)."),
+    h("h2", {}, "Stockage sur votre appareil"), h("p", {}, "Bennoo garde sur votre appareil votre session de connexion et quelques préférences (aides repliées, page de bienvenue vue). Pas de cookie publicitaire ni de mesure d'audience."),
+    h("h2", {}, "Vos droits"), h("p", {}, "Accès, rectification, suppression (directement dans l'application), opposition, portabilité : écrivez à ", TODO("adresse email de contact"), ". Vous pouvez aussi saisir la CDP (Commission de protection des données personnelles, Sénégal) ou la CNIL (France)."),
+    h("h2", {}, "Sécurité"), h("p", {}, "Les accès sont contrôlés par des règles de sécurité appliquées par Firebase lui-même ; les liens d'invitation utilisent des jetons aléatoires impossibles à deviner ; les connexions sont chiffrées (HTTPS)."),
+  ]],
+  mentions: ["Mentions légales", () => [
+    h("h2", {}, "Éditeur"), h("p", {}, TODO("nom ou raison sociale, forme juridique, adresse, numéro d'immatriculation (NINEA / SIREN) le cas échéant"), "."),
+    h("h2", {}, "Directeur de la publication"), h("p", {}, TODO("nom"), "."),
+    h("h2", {}, "Contact"), h("p", {}, TODO("adresse email"), "."),
+    h("h2", {}, "Hébergement"),
+    h("ul", {},
+      h("li", {}, "Site : GitHub Pages — GitHub Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis."),
+      h("li", {}, "Données et connexion : Google Firebase — Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irlande.")),
+    h("h2", {}, "Crédits photos"), h("p", {}, "Photos d'illustration : Unsplash (licence Unsplash)."),
+    h("ul", { class: "credits" }, Object.values(PHOTOS).map(([, author, what]) => h("li", {}, `${what} : ${author}`))),
+  ]],
+};
+
+function legalScreen(which = "cgu") {
+  const key = LEGAL[which] ? which : "cgu";
+  const [title, body] = LEGAL[key];
+  const tabs = h("div", { class: "tabs", role: "tablist" }, Object.entries(LEGAL).map(([k, [t]]) =>
+    h("a", { href: `#/conditions/${k}`, role: "tab", "aria-selected": String(k === key) }, t.replace("Politique de ", "").replace(/^c/, "C"))));
+  const node = (currentUser ? screen : bare)(header(title, currentUser ? "#/plus" : "#/"),
+    h("p", { class: "alert alert-info" }, "Version de travail de la phase de test, à faire valider juridiquement avant l'ouverture au public. Les mentions surlignées sont à compléter."),
+    tabs, h("section", { class: "card form legal" }, body()));
+  return { node, title, nav: currentUser ? "more" : null };
+}
+
+// ─── Transmettre un rôle avant de partir ─────────────────────────────────
+/** Le propriétaire transmet la famille à un autre membre (il devient administrateur). */
+async function transferOwnership(fid, toUid) {
+  const me = auth.currentUser.uid;
+  const members = db.collection("families").doc(fid).collection("members");
+  const batch = db.batch();
+  batch.update(members.doc(me), { role: "admin", transferTo: toUid });
+  batch.update(members.doc(toUid), { role: "owner" });
+  await batch.commit();
+}
+/** Un organisateur quitte l'événement en laissant la main à un autre organisateur. */
+async function leaveEvent(fid, eid, handoverTo) {
+  const me = auth.currentUser.uid;
+  const ref = db.collection("families").doc(fid).collection("events").doc(eid).collection("participants").doc(me);
+  if (handoverTo) await ref.update({ role: "member", handoverTo });
+  await ref.delete();
+}
+
+// ─── Suppression du compte ───────────────────────────────────────────────
+const DELETED_NAME = "Compte supprimé";
+
+/** Ce que la suppression va faire, et ce qui la bloque (avec la marche à suivre). */
+async function deletionPlan() {
+  const me = auth.currentUser.uid;
+  const [families, events] = await Promise.all([data.listMyFamilies(), data.listMyEvents()]);
+  const plan = { blockers: [], families: [], events: [] };
+  for (const f of families) {
+    const members = await data.listFamilyMembers(f.id);
+    const others = members.filter((m) => m.uid !== me);
+    if (f.myRole === "owner" && others.length) plan.blockers.push({ text: `Vous êtes propriétaire de « ${f.name} », qui a d'autres membres : transmettez-la d'abord à l'un d'eux.`, href: `#/famille/${enc(f.id)}/membres`, action: "Ouvrir les membres" });
+    plan.families.push({ ...f, alone: others.length === 0 });
+  }
+  for (const e of events) {
+    const parts = await data.listParticipants(e.familyId, e.id);
+    const others = parts.filter((p) => p.uid !== me);
+    const otherOrganizer = others.find((p) => p.role === "organizer");
+    if (e.myRole === "organizer" && others.length && !otherOrganizer) plan.blockers.push({ text: `Vous êtes le seul organisateur de « ${e.title} » : nommez un autre organisateur parmi les participants.`, href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}/participants`, action: "Ouvrir les participants" });
+    plan.events.push({ ...e, alone: others.length === 0, handoverTo: otherOrganizer?.uid ?? null });
+  }
+  return plan;
+}
+
+async function deleteAccount(plan, onStep) {
+  const me = auth.currentUser.uid;
+  const fam = (fid) => db.collection("families").doc(fid);
+  for (const e of plan.events) {
+    onStep(`Événement « ${e.title} »…`);
+    const evRef = fam(e.familyId).collection("events").doc(e.id);
+    for (const c of await orga.listMyContributions(e.familyId, e.id)) {
+      if (c.status !== "confirmed") await orga.deleteMyContribution(e.familyId, e.id, c.id);
+      else { // confirmée : elle reste dans les comptes du trésorier, sans lien vers votre compte
+        await evRef.collection("contributions").doc(c.id).collection("private").doc("identity").delete().catch(() => {});
+        await evRef.collection("participants").doc(me).collection("myContributions").doc(c.id).delete().catch(() => {});
+      }
+    }
+    if (e.myRole !== "organizer") await leaveEvent(e.familyId, e.id, null);
+    else if (e.handoverTo) await leaveEvent(e.familyId, e.id, e.handoverTo);
+    else await evRef.collection("participants").doc(me).update({ displayName: DELETED_NAME }); // seul participant : l'événement n'est plus visible de personne
+  }
+  for (const f of plan.families) {
+    onStep(`Famille « ${f.name} »…`);
+    const ref = fam(f.id).collection("members").doc(me);
+    if (f.myRole !== "owner") await ref.delete();
+    else await ref.update({ displayName: DELETED_NAME }); // seul membre : la famille reste vide
+  }
+  onStep("Profil…");
+  await db.collection("users").doc(me).delete();
+  onStep("Compte de connexion…");
+  await auth.currentUser.delete();
+}
+
+async function deleteAccountScreen() {
+  const plan = await deletionPlan();
+  const status = h("div", { role: "status", "aria-live": "polite" });
+  let body;
+  if (plan.blockers.length) {
+    body = h("section", { class: "card form" }, h("h2", {}, "Avant de supprimer votre compte"),
+      h("p", { class: "muted" }, "Pour que vos familles et vos événements gardent un responsable, il reste à faire :"),
+      h("ul", { class: "list" }, plan.blockers.map((b) => h("li", { class: "item" }, h("span", { class: "grow" }, h("span", { class: "title wrap" }, b.text)), h("a", { href: b.href, class: "btn btn-sm" }, b.action)))),
+      h("p", { class: "muted small" }, "Revenez ensuite sur cette page."));
+  } else {
+    const form = h("form", { class: "card form", novalidate: true },
+      h("h2", {}, "Supprimer définitivement mon compte"),
+      h("ul", {},
+        h("li", {}, "Votre profil et votre compte de connexion sont effacés."),
+        h("li", {}, `Vous quittez ${plural(plan.families.length, "famille")} et ${plural(plan.events.length, "événement")}.`),
+        h("li", {}, "Vos contributions non confirmées sont retirées ; les contributions déjà confirmées restent dans les comptes du trésorier, sans lien avec votre compte."),
+        h("li", {}, `Là où votre nom doit rester (famille ou événement dont vous êtes le seul membre), il est remplacé par « ${DELETED_NAME} ».`)),
+      h("p", { class: "alert alert-error" }, "C'est définitif : rien ne pourra être récupéré."),
+      field("Pour confirmer, tapez SUPPRIMER", { name: "confirm", class: "input", autocomplete: "off" }),
+      h("button", { type: "submit", class: "btn btn-block danger-btn" }, "Supprimer mon compte"), status);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      showFormError(form, null);
+      if (values(form).confirm.trim().toUpperCase() !== "SUPPRIMER") { showFormError(form, "Tapez SUPPRIMER pour confirmer."); return; }
+      await withBusy(form.querySelector("button[type=submit]"), async () => {
+        try {
+          await deleteAccount(plan, (t) => { status.textContent = t; });
+          location.hash = "#/";
+          toast("Votre compte a été supprimé");
+        } catch (err) {
+          status.textContent = "";
+          showFormError(form, err?.code === "auth/requires-recent-login"
+            ? "Vos données ont été effacées, mais Google ou Firebase demande une connexion récente pour supprimer le compte lui-même : déconnectez-vous, reconnectez-vous, puis revenez sur cette page."
+            : errMsg(err));
+        }
+      });
+    });
+    body = form;
+  }
+  return { node: screen(header("Supprimer mon compte", "#/plus"), body), title: "Supprimer mon compte", nav: "more" };
+}
+
 // ─── 13. Paramètres et profil ─────────────────────────────────────────────
 async function settingsScreen() {
   const profile = await data.getProfile();
@@ -2871,9 +3133,13 @@ async function settingsScreen() {
       row("#/bienvenue", "📖", "Guide de Bennoo", "À quoi sert Bennoo et comment s'en servir"),
       row("#/profil", "👤", "Mon profil", "Nom et téléphone"),
       row("#/familles", "👨‍👩‍👧", "Familles et permissions", "Membres, rôles, invitations"),
-      row("#/conditions", "🔒", "Confidentialité", "Ce que voient les autres membres"),
+      row("#/installer", "📲", "Installer l'application", isInstalled() ? "Déjà installée sur cet appareil" : "Icône Bennoo sur l'écran d'accueil"),
+      row("#/conditions/confidentialite", "🔒", "Confidentialité", "Ce que voient les autres, vos droits"),
+      row("#/conditions/cgu", "📄", "Conditions d'utilisation et mentions légales", null),
       h("li", {}, h("div", { class: "item" }, h("span", { class: "ico", "aria-hidden": "true" }, "🌐"), h("span", { class: "grow" }, h("span", { class: "title" }, "Langue"), h("span", { class: "sub" }, "Français (wolof prévu plus tard)")))),
-      h("li", {}, out)),
+      h("li", {}, out),
+      h("li", {}, h("a", { href: "#/supprimer-compte", class: "item danger" }, h("span", { class: "ico", "aria-hidden": "true" }, "🗑"),
+        h("span", { class: "grow" }, h("span", { class: "title danger" }, "Supprimer mon compte"), h("span", { class: "sub" }, "Définitif")), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
   );
   return { node, title: "Paramètres", nav: "more" };
 }
@@ -2901,24 +3167,6 @@ async function profileScreen() {
     });
   });
   return { node: screen(header("Mon profil", "#/plus"), form), title: "Mon profil", nav: "more" };
-}
-
-function termsScreen() {
-  const p = (t) => h("p", {}, t);
-  const node = bare(header("Conditions et confidentialité", "#/"),
-    h("section", { class: "card form" },
-      h("h2", {}, "En bref"),
-      p("Bennoo aide votre famille à organiser ses événements. Vos données servent uniquement à faire fonctionner l'application ; elles ne sont ni vendues ni utilisées pour de la publicité."),
-      h("h2", {}, "Qui voit quoi"),
-      p("Un événement n'est visible que de ses participants, même au sein de la famille. Votre profil (téléphone compris) n'est visible que par vous. Les membres d'une famille voient le nom et le rôle des autres membres."),
-      h("h2", {}, "Vos données"),
-      p("Les données sont hébergées par Google Firebase, dans une région européenne. Vous pouvez modifier votre profil à tout moment et quitter une famille. Pour supprimer votre compte, contactez l'administrateur de Bennoo."),
-      h("h2", {}, "Services extérieurs"),
-      p("Les photos d'illustration sont chargées depuis Unsplash ; la carte du lieu depuis Google Maps, seulement si vous cliquez sur « Afficher la carte » ; le QR code est créé dans votre navigateur. Ces services voient votre adresse IP, comme tout site web."),
-      h("h2", {}, "Crédits photos (Unsplash)"),
-      h("ul", { class: "credits" }, Object.values(PHOTOS).map(([, author, what]) => h("li", {}, `${what} : ${author}`))),
-      h("p", { class: "muted small" }, "Version provisoire de la phase de test, à valider juridiquement avant l'ouverture au public.")));
-  return { node, title: "Conditions" };
 }
 
 // ─── Erreurs ──────────────────────────────────────────────────────────────
@@ -2969,7 +3217,8 @@ async function route() {
     }
   };
 
-  if (head === "conditions") return render(termsScreen());
+  if (head === "conditions") return render(legalScreen(a));
+  if (head === "installer") return render(installScreen());
   // Réponse d'un invité (RSVP) : accessible sans compte, avec le lien personnel.
   if (head === "rsvp" && a && b && parts[3]) return render(rsvpScreen(a, b, parts[3]));
   if (!currentUser) {
@@ -3000,6 +3249,7 @@ async function route() {
   if (head === "budget") return render(myBudgetScreen());
   if (head === "plus") return render(settingsScreen());
   if (head === "profil") return render(profileScreen());
+  if (head === "supprimer-compte") return render(deleteAccountScreen());
   return render(notFoundScreen());
 }
 

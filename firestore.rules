@@ -73,7 +73,9 @@ service cloud.firestore {
       allow get: if signedIn() && me() == userId;
       allow create: if signedIn() && me() == userId && validProfile() && data().createdAt == request.time;
       allow update: if signedIn() && me() == userId && validProfile() && data().createdAt == resource.data.createdAt;
-      allow list, delete: if false;
+      // Suppression du compte : chacun efface son propre profil.
+      allow delete: if signedIn() && me() == userId;
+      allow list: if false;
     }
 
     // ─── Familles ────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ service cloud.firestore {
       // Appartenances
       match /members/{memberId} {
         function validMember() {
-          return data().keys().hasOnly(['uid', 'role', 'displayName', 'joinedAt', 'inviteToken'])
+          return data().keys().hasOnly(['uid', 'role', 'displayName', 'joinedAt', 'inviteToken', 'transferTo'])
             && data().uid == memberId && text(data().displayName, 1, 80);
         }
         function validInvite(token) {
@@ -113,6 +115,14 @@ service cloud.firestore {
           (isFamilyAdmin(fid) && memberId != me() && resource.data.role != 'owner'
             && changed().hasOnly(['role']) && data().role in ['admin', 'member'])
           || (memberId == me() && changed().hasOnly(['displayName']) && text(data().displayName, 1, 80))
+          // Transmission de la famille, en un seul lot : le propriétaire devient administrateur
+          // en désignant (transferTo) le membre qui devient propriétaire.
+          || (memberId == me() && resource.data.role == 'owner' && data().role == 'admin'
+            && changed().hasOnly(['role', 'transferTo']) && data().transferTo is string && data().transferTo != me()
+            && getAfter(memberPath(fid, data().transferTo)).data.role == 'owner')
+          || (memberId != me() && familyRole(fid) == 'owner' && resource.data.role in ['admin', 'member']
+            && changed().hasOnly(['role']) && data().role == 'owner'
+            && getAfter(memberPath(fid, me())).data.role == 'admin' && getAfter(memberPath(fid, me())).data.transferTo == memberId)
         );
         // On peut quitter une famille, ou en être retiré par un admin ; jamais le propriétaire.
         allow delete: if verified() && resource.data.role != 'owner'
@@ -166,7 +176,7 @@ service cloud.firestore {
 
         match /participants/{pid} {
           function validParticipant() {
-            return data().keys().hasOnly(['uid', 'role', 'displayName', 'addedAt'])
+            return data().keys().hasOnly(['uid', 'role', 'displayName', 'addedAt', 'handoverTo'])
               && data().uid == pid && text(data().displayName, 1, 80)
               && data().role in ['organizer', 'treasurer', 'member'];
           }
@@ -180,8 +190,15 @@ service cloud.firestore {
                 && data().displayName == get(memberPath(fid, pid)).data.displayName)
           );
           // Un organisateur change le rôle des AUTRES : il reste donc toujours au moins un organisateur.
-          allow update: if verified() && isOrganizer(fid, eid) && pid != me()
-            && validParticipant() && changed().hasOnly(['role']);
+          allow update: if verified() && validParticipant() && (
+            (isOrganizer(fid, eid) && pid != me() && changed().hasOnly(['role']))
+            // un organisateur qui part laisse la main à un AUTRE organisateur (handoverTo), puis se retire
+            || (pid == me() && resource.data.role == 'organizer' && data().role == 'member'
+              && changed().hasOnly(['role', 'handoverTo']) && data().handoverTo is string && data().handoverTo != me()
+              && get(participantPath(fid, eid, data().handoverTo)).data.role == 'organizer')
+            // suppression du compte : le nom est remplacé quand la ligne doit rester
+            || (pid == me() && changed().hasOnly(['displayName']) && data().displayName == 'Compte supprimé')
+          );
           allow delete: if verified() && (
             (isOrganizer(fid, eid) && pid != me())
             || (pid == me() && resource.data.role != 'organizer')

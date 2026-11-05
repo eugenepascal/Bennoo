@@ -474,3 +474,15 @@ h1, h2 { letter-spacing: -.2px; }
 .welcome-step .n { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(180deg, #6d28d9, #4c1d95); color: #fff; font-weight: 800; display: grid; place-items: center; flex: none; }
 .welcome-step h3 { font-size: 1rem; margin-bottom: 2px; }
 .welcome-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+/* ─── Étape 5 : installation, pages légales, finitions ─── */
+.install-hero { display: flex; gap: 14px; align-items: center; }
+.install-hero img { border-radius: 18px; flex: none; }
+.install-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.legal h2 { font-size: 1.02rem; margin-top: 6px; }
+.legal ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+mark.todo { background: var(--gold-200); color: #6b4106; padding: 0 4px; border-radius: 4px; font-weight: 600; }
+.row-actions { display: inline-flex; gap: 8px; }
+details.archived summary { cursor: pointer; font-weight: 700; color: var(--violet-800); padding: 6px 0; }
+details.archived[open] summary { margin-bottom: 8px; }
+.settings a.item.danger .title { color: var(--red); }
