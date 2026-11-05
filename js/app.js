@@ -107,7 +107,7 @@ function googleButton(form) {
   const status = h("p", { class: "muted small center", role: "status", "aria-live": "polite" });
   btn.addEventListener("click", () => withBusy(btn, async () => {
     showFormError(form, null);
-    status.textContent = "";
+    status.textContent = "Fenêtre Google ouverte : choisissez votre compte. La connexion peut prendre une dizaine de secondes, ne recliquez pas.";
     try {
       await signInWithGoogle();
     } catch (err) {
