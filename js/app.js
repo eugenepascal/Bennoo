@@ -70,7 +70,11 @@ async function signInWithGoogle() {
   try {
     // Pas de redirection : sur github.io, la redirection Google revient sans session
     // (le navigateur isole le stockage de bennoo-4186e.firebaseapp.com).
-    await auth.signInWithPopup(provider);
+    // Délai maximal : si la fenêtre Google reste sans réponse 2 minutes, on arrête d'attendre.
+    await Promise.race([
+      auth.signInWithPopup(provider),
+      new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error("timeout"), { code: "auth/timeout" })), 120000)),
+    ]);
   } catch (err) {
     if (isStorageError(err)) {
       for (let i = 0; i < 20 && !auth.currentUser; i++) await new Promise((r) => setTimeout(r, 150));
@@ -100,11 +104,45 @@ async function ensureProfile(user) {
 function googleButton(form) {
   const btn = h("button", { type: "button", class: "btn btn-block btn-google" },
     h("img", { src: "images/google.svg", alt: "", width: 20, height: 20 }), "Continuer avec Google");
+  const status = h("p", { class: "muted small center", role: "status", "aria-live": "polite" });
   btn.addEventListener("click", () => withBusy(btn, async () => {
     showFormError(form, null);
-    try { await signInWithGoogle(); } catch (err) { showFormError(form, errMsg(err)); }
+    status.textContent = "";
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      // Sur un site hébergé hors de Firebase, la fenêtre Google peut se fermer avant que la
+      // réponse arrive. On attend donc un peu la connexion avant d'annoncer un échec.
+      const waitable = ["auth/popup-closed-by-user", "auth/network-request-failed", "auth/timeout"].includes(err?.code) || !err?.code;
+      if (waitable && await waitForSignIn(GOOGLE_WAIT_SECONDS, (left) => {
+        btn.textContent = `Connexion en cours… ${left} s`;
+        status.textContent = "Nous attendons la réponse de Google, ne fermez pas la page.";
+      })) { status.textContent = "Connecté(e) !"; return; }
+      status.textContent = "";
+      showFormError(form, waitable
+        ? "La connexion Google n'a pas abouti. Cliquez de nouveau sur « Continuer avec Google » : le deuxième essai fonctionne en général."
+        : errMsg(err));
+    }
   }));
-  return h("div", { class: "form" }, h("p", { class: "or" }, "Ou continuer avec"), btn);
+  return h("div", { class: "form" }, h("p", { class: "or" }, "Ou continuer avec"), btn, status);
+}
+
+const GOOGLE_WAIT_SECONDS = 15;
+/** Attend jusqu'à `seconds` secondes qu'un utilisateur soit connecté ; vrai s'il l'est. */
+function waitForSignIn(seconds, onTick) {
+  if (auth?.currentUser) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let left = seconds;
+    onTick(left);
+    const stop = (ok) => { clearInterval(timer); unsubscribe(); resolve(ok); };
+    const unsubscribe = auth.onAuthStateChanged((u) => { if (u) stop(true); });
+    const timer = setInterval(() => {
+      left -= 1;
+      if (auth.currentUser) return stop(true);
+      if (left <= 0) return stop(false);
+      onTick(left);
+    }, 1000);
+  });
 }
 
 /* ---------- Données (Firestore) ----------
