@@ -82,7 +82,7 @@ async function signInWithGoogle() {
     if (err.code === "auth/popup-blocked") {
       throw Object.assign(new Error("La fenêtre Google a été bloquée. Autorisez les fenêtres pop-up pour ce site, puis réessayez."), { code: undefined });
     }
-    if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") return;
+    if (err.code === "auth/cancelled-popup-request") return; // un second clic a remplacé la première fenêtre
     throw err;
   }
 }
@@ -592,7 +592,7 @@ function authErrorMessage(code) {
     "auth/invalid-email": "Adresse email invalide.",
     "auth/email-already-in-use": "Un compte existe déjà avec cet email. Connectez-vous ou réinitialisez le mot de passe.",
     "auth/weak-password": "Mot de passe trop faible : 8 caractères minimum.",
-    "auth/invalid-credential": "Email ou mot de passe incorrect.",
+    "auth/invalid-credential": "Email ou mot de passe incorrect. Si vous avez créé votre compte avec Google, utilisez « Continuer avec Google » (ou « Mot de passe oublié ? » pour vous créer aussi un mot de passe).",
     "auth/wrong-password": "Email ou mot de passe incorrect.",
     "auth/user-not-found": "Email ou mot de passe incorrect.",
     "auth/too-many-requests": "Trop de tentatives. Patientez quelques minutes puis réessayez.",
@@ -600,7 +600,7 @@ function authErrorMessage(code) {
     "auth/operation-not-allowed": "Ce mode de connexion n'est pas encore activé dans Firebase.",
     "auth/unauthorized-domain": "Ce site n'est pas encore autorisé dans Firebase (domaines autorisés).",
     "auth/account-exists-with-different-credential": "Un compte existe déjà avec cet email : connectez-vous avec votre mot de passe.",
-    "auth/popup-closed-by-user": "Connexion Google annulée.",
+    "auth/popup-closed-by-user": "La fenêtre Google s'est fermée avant la fin de la connexion. Réessayez ; si elle ne s'ouvre pas, autorisez les fenêtres pop-up pour ce site.",
     "permission-denied": "Action non autorisée.",
     "unavailable": "Service momentanément indisponible. Réessayez.",
   };
@@ -2895,7 +2895,9 @@ document.getElementById("skip")?.addEventListener("click", () => root.querySelec
 
 function show({ node, title, nav = null }) {
   document.body.classList.toggle("with-nav", Boolean(nav));
-  if (!["Introuvable", "Erreur"].includes(title)) insertHelp(node, location.hash.replace(/^#/, "") || "/");
+  // Aide : sur les pages de l'application connectée, et sur les pages ouvertes depuis un lien (invitation, réponse).
+  const path = location.hash.replace(/^#/, "") || "/";
+  if (!["Introuvable", "Erreur"].includes(title) && (nav || /^\/(rsvp|rejoindre)\//.test(path))) insertHelp(node, path);
   root.replaceChildren(node, nav ? tabbar(nav) : "");
   document.title = title ? `${title} · Bennoo` : "Bennoo";
   const heading = root.querySelector("h1");
