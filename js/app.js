@@ -2604,7 +2604,7 @@ async function myBudgetScreen() {
     const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
     const p = b && e.budgetPlanned ? pct(b.confirmed, e.budgetPlanned) : 0;
     return h("a", { href: `${base}/budget`, class: "card budget-row" },
-      donut(p, b ? formatAmount(b.confirmed, e.currency) : "—", e.budgetPlanned ? `/ ${formatAmount(e.budgetPlanned, e.currency)}` : "budget à fixer"),
+      donut(p, b ? kpiAmount(b.confirmed, e.currency) : "—", e.budgetPlanned ? `/ ${kpiAmount(e.budgetPlanned, e.currency)}` : "budget à fixer"),
       h("span", { class: "grow" }, h("strong", {}, e.title), h("span", { class: "sub" }, [e.startsAt ? shortDate(e.startsAt) : "Date à fixer", EVENT_ROLES[e.myRole]].join(" · ")),
         h("span", { class: "sub" }, b ? `Reste à financer : ${formatAmount(Math.max(0, e.budgetPlanned - b.confirmed), e.currency)}` : "Totaux pas encore calculés (l'organisateur ou le trésorier doit ouvrir le budget)")),
       h("span", { class: "chev", "aria-hidden": "true" }, "›"));
