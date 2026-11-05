@@ -36,7 +36,8 @@ Canada, États-Unis…) qui organisent elles-mêmes, sans organisateur professio
 | Étapes 2 à 4 : tâches et calendrier, budget, dépenses, contributions, invités et réponses | **Codées et essayées** le 02/11/2026 côté organisateur et invité sans compte ([rapport de test](docs/rapport-de-test-2026-11-02.md)) ; rôles trésorier et membre à essayer avec un second compte |
 | Règles de sécurité Firestore | Étape 1 testée sur l'émulateur (18 tests) ; étapes 2 à 4 **écrites, non testées sur émulateur** (indisponible dans l'environnement de développement) : à vérifier avec le scénario de test |
 | Liaison avec le projet Firebase | **Faite** : projet `bennoo-4186e`, configuration en haut de `js/app.js` (sans Google Analytics) |
-| Étapes 5 et 6 (installation sur téléphone, pages légales, album photos) | **Prévues** |
+| Étape 5 : application installable, pages légales, suppression de compte, transmission de la famille, quitter / archiver un événement, renommer la famille | **Codée** le 05/11/2026 ; règles Firestore à republier ; à essayer |
+| Étape 6 : album photos | **Prévue** (forfait Blaze) |
 
 Aucune donnée d'exemple n'est présentée comme réelle : tout ce qui s'affiche vient du projet Firebase.
 
@@ -263,6 +264,14 @@ c'est Firebase qui décide, à chaque lecture et chaque écriture, si elle est a
 - Un organisateur change le rôle **des autres** uniquement : il reste donc toujours un organisateur.
 - Un participant peut se retirer lui-même, sauf s'il est organisateur.
 
+**Étape 5 : départs et suppression**
+- Chacun peut **supprimer son profil** (`users`).
+- **Transmission de la famille** : en un seul lot, le propriétaire devient administrateur en désignant
+  (`transferTo`) le membre qui devient propriétaire ; impossible sans cette désignation.
+- **Organisateur qui part** : il repasse membre en désignant (`handoverTo`) un **autre organisateur**
+  existant, puis se retire. Il reste donc toujours un organisateur.
+- **Anonymisation** : un participant peut seulement remplacer son nom par « Compte supprimé ».
+
 **Listes « Mes familles » et « Mes événements »**
 - Chacun ne peut lister, à travers toutes les familles, **que ses propres** appartenances et participations.
 
@@ -347,7 +356,7 @@ par **Firebase Authentication**, sans règle à écrire.
 | 2 | Tâches : responsable, échéance, statut, checklist selon la cérémonie, calendrier | Codée — à essayer |
 | 3 | Budget, dépenses, contributions (promise → déclarée → confirmée), anonymat, totaux | Codée — à essayer |
 | 4 | Invités par foyer, lien personnel WhatsApp, QR code, réponse (RSVP) sans compte | Codée — à essayer |
-| 5 | Tableau de bord complet, installation sur téléphone, pages légales, mise en ligne | Prévue |
+| 5 | Tableau de bord complet, installation sur téléphone, pages légales, suppression de compte | Codée — à essayer |
 | 6 | Album photos de l'événement (forfait Firebase Blaze) | Prévue |
 | — | Avant l'ouverture au public : tests avec 5 familles, avis juridique (CDP Sénégal, RGPD) | Prévue |
 
@@ -390,7 +399,8 @@ version en wolof · Bennoo Pro (prestataires et devis).
 - **Illustrations** : les maquettes utilisent des photos de familles ; l'application utilise pour
   l'instant des dégradés, le logo et des emojis. Des photos haute définition libres de droits peuvent
   être ajoutées dans `images/`.
-- **Suppression de compte** : pas encore disponible depuis l'application (prévue à l'étape 5).
+- **Suppression de compte** : Plus → Supprimer mon compte. Bloquée tant que la personne est propriétaire d'une famille avec d'autres membres (la transmettre d'abord) ou seule organisatrice d'un événement à plusieurs (nommer un autre organisateur). Une contribution confirmée reste dans les comptes du trésorier, sans lien avec le compte ; le nom devient « Compte supprimé » là où la ligne doit rester.
+- **Pages légales** : textes de travail avec des mentions à compléter (éditeur, contact, droit applicable), à faire valider.
 - **Téléphone des membres** : le téléphone reste privé ; les boutons « Appeler » et « Message » des
   maquettes demanderont l'accord explicite de chaque membre pour partager son numéro.
 - **Conditions d'utilisation** : texte provisoire de la phase de test, à valider juridiquement.
