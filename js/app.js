@@ -66,7 +66,8 @@ function applyPersistence() {
 async function signInWithGoogle() {
   requireFirebase();
   const provider = new firebase.auth.GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: "select_account" });
+  // Pas de « select_account » (comme Yond) : déjà connecté à Google, la fenêtre se referme seule.
+  // Pour changer de compte Google : se déconnecter de Google ou utiliser une fenêtre privée.
   try {
     // Pas de redirection : sur github.io, la redirection Google revient sans session
     // (le navigateur isole le stockage de bennoo-4186e.firebaseapp.com).
@@ -2456,7 +2457,6 @@ async function homeScreen() {
   const showFamily = families.length > 1;
   const stats = await Promise.all(events.map(eventStats));
   const byId = Object.fromEntries(stats.map((x) => [x.e.id, x]));
-  const activity = await recentActivity(stats);
   const next = upcoming[0] ? byId[upcoming[0].id] : null;
 
   const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? 0));
@@ -2487,11 +2487,17 @@ async function homeScreen() {
         h("ul", { class: "list task-cards" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null);
   }
 
-  const aside = h("aside", { class: "card activity desk-only", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"),
-    activity.length ? h("ul", { class: "list" }, activity.map((a) => h("li", {}, h("a", { href: a.href, class: "item" },
-      h("span", { class: "act-ico", "aria-hidden": "true" }, a.icon),
-      h("span", { class: "grow" }, h("span", { class: "title wrap" }, a.text), h("span", { class: "sub" }, `${a.sub} · ${relTime(a.when)}`))))))
-      : h("p", { class: "muted small" }, "Rien pour l'instant : les tâches terminées, réponses d'invités et contributions apparaîtront ici."));
+  // Activité récente : chargée après l'affichage, et seulement sur grand écran (là où elle est visible).
+  const activityBox = h("div", {}, loading("Chargement de l'activité…"));
+  const aside = h("aside", { class: "card activity desk-only", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"), activityBox);
+  if (events.length && window.matchMedia("(min-width: 900px)").matches) {
+    recentActivity(stats).then((activity) => activityBox.replaceChildren(activity.length
+      ? h("ul", { class: "list" }, activity.map((a) => h("li", {}, h("a", { href: a.href, class: "item" },
+        h("span", { class: "act-ico", "aria-hidden": "true" }, a.icon),
+        h("span", { class: "grow" }, h("span", { class: "title wrap" }, a.text), h("span", { class: "sub" }, `${a.sub} · ${relTime(a.when)}`))))))
+      : h("p", { class: "muted small" }, "Rien pour l'instant : les tâches terminées, réponses d'invités et contributions apparaîtront ici.")))
+      .catch(() => activityBox.replaceChildren(h("p", { class: "muted small" }, "Activité momentanément indisponible.")));
+  }
 
   const node = screen(
     h("div", { class: "hello" },
