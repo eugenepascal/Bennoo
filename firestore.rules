@@ -21,6 +21,7 @@ rules_version = '2';
 //   families/{fid}/events/{eid}/contributions/{cid}   contribution (+ private/identity si anonyme)
 //   families/{fid}/events/{eid}/summary/{budget|guests}  totaux lisibles par tous les participants
 //   families/{fid}/events/{eid}/committees/{id}      comité (nom, membres)
+//   families/{fid}/events/{eid}/programme/{id}       programme du jour J (heure, moment, lieu)
 //   families/{fid}/events/{eid}/guests/{jeton}        foyer invité, répond sans compte avec son lien
 //   families/{fid}/events/{eid}/public/invitation     carton d'invitation lisible avec le lien
 
@@ -313,6 +314,18 @@ service cloud.firestore {
               && nat(data().pending) && nat(data().attending))
           );
           allow delete: if false;
+        }
+
+        // ─── Programme du jour J : visible des participants, géré par l'organisateur ──
+        match /programme/{pid} {
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && isOrganizer(fid, eid)
+            && data().keys().hasOnly(['time', 'title', 'place', 'createdBy', 'createdAt'])
+            && data().time is string && data().time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && text(data().title, 1, 80) && optText(data().place, 80)
+            && data().createdBy == me() && data().createdAt == request.time;
+          allow delete: if verified() && isOrganizer(fid, eid);
+          allow update: if false;
         }
 
         // ─── Comités : visibles par les participants, gérés par l'organisateur ──

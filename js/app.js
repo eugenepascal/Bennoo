@@ -1316,14 +1316,14 @@ async function joinScreen(fid, token) {
 // ─── 6. Création d'un événement (5 étapes) ────────────────────────────────
 const WIZARD = ["Type d'événement", "Informations", "Lieu et date", "Budget", "Participants"];
 
-async function newEventScreen(presetFid) {
+async function newEventScreen(presetFid, presetType) {
   const families = await data.listMyFamilies();
   if (families.length === 0) {
     location.hash = "#/";
     return null;
   }
   const state = {
-    step: 0, type: "WEDDING", familyId: families.some((f) => f.id === presetFid) ? presetFid : families[0].id,
+    step: 0, type: EVENT_TYPES[presetType] ? presetType : "WEDDING", familyId: families.some((f) => f.id === presetFid) ? presetFid : families[0].id,
     title: "", description: "", startsAt: "", venue: "", city: "", currency: "XOF", budget: "", guests: "", picks: {}, cover: null,
   };
   const backHref = presetFid ? `#/famille/${enc(presetFid)}/evenements` : "#/";
@@ -1685,8 +1685,11 @@ async function eventOverview(ctx) {
   const next = tasks.filter((t) => t.status !== "done").slice(0, 3);
   const b = summary.budget;
   const g = summary.guests;
+  const invitation = await orga.getInvitation(fid, eid).catch(() => null);
+  const programme = await programmeSection(ctx);
 
   return h("div", { class: "form" },
+    liveCountdown(event),
     h("div", { class: "kpis" },
       h("div", { class: "kpi big" }, h("span", { class: "v" }, n === null ? "—" : n > 0 ? `J-${n}` : n === 0 ? "Jour J" : "Passé"),
         h("span", { class: "l" }, n === null ? "Date à fixer" : n > 0 ? "avant le grand jour" : n === 0 ? "c'est aujourd'hui !" : "événement passé")),
@@ -1701,6 +1704,9 @@ async function eventOverview(ctx) {
       h("div", { class: "section-head" }, h("h2", {}, "Prochaines tâches"), h("a", { href: `${base}/taches`, class: "small" }, "Tout voir")),
       next.length ? h("ul", { class: "list" }, next.map((t) => taskItem(ctx, t, tasks))) :
         h("p", { class: "muted small" }, tasks.length ? "Toutes les tâches sont terminées. Bravo !" : "Aucune tâche. Ouvrez l'onglet Tâches pour commencer.")),
+    programme,
+    milestones(event, tasks, summary, Boolean(invitation)),
+    saveTheDateCard(ctx, invitation),
     h("section", { class: "card" }, h("div", { class: "section-head" }, h("h2", {}, "Informations"),
       isOrganizer ? h("span", { class: "row-actions" }, archiveButton(ctx), h("a", { href: `${base}/modifier`, class: "btn btn-sm" }, "Modifier")) : null),
     h("dl", { class: "facts" },
@@ -1738,11 +1744,12 @@ async function tasksPanel(ctx, view) {
   const tasks = await orga.listTasks(fid, eid);
   const head = h("div", { class: "section-head" }, h("h2", {}, "Tâches"),
     isOrganizer ? h("a", { href: `${base}/taches/nouvelle`, class: "btn btn-primary btn-sm" }, "+ Nouvelle tâche") : null);
-  const switcher = subTabs([[`${base}/taches`, "Liste", "liste"], [`${base}/taches/calendrier`, "Calendrier", "calendrier"], [`${base}/taches/kanban`, "Kanban", "kanban"]],
-    ["calendrier", "kanban"].includes(view) ? view : "liste");
+  const switcher = subTabs([[`${base}/taches`, "Liste", "liste"], [`${base}/taches/etapes`, "Étapes", "etapes"], [`${base}/taches/calendrier`, "Calendrier", "calendrier"], [`${base}/taches/kanban`, "Kanban", "kanban"]],
+    ["calendrier", "kanban", "etapes"].includes(view) ? view : "liste");
 
   if (tasks.length === 0) {
-    const empty = h("div", { class: "card form" },
+    const empty = h("div", { class: "card form photo-empty" },
+      h("div", { class: "pe-photo", "aria-hidden": "true" }, photo("womenTrad", 640, 300)),
       h("p", {}, h("strong", {}, "Aucune tâche pour l'instant.")),
       isOrganizer ? h("p", { class: "muted small" }, `Bennoo peut ajouter une checklist adaptée (${EVENT_TYPES[event.type].toLowerCase()}) : ${plural(checklistFor(event).length, "tâche")}${event.startsAt ? ", avec des échéances calculées depuis la date de l'événement" : ", sans échéance tant que la date n'est pas fixée"}. Vous pourrez tout modifier.`)
         : h("p", { class: "muted small" }, "L'organisateur n'a pas encore créé de tâche."));
@@ -1758,6 +1765,7 @@ async function tasksPanel(ctx, view) {
 
   if (view === "calendrier") return h("div", { class: "form" }, head, switcher, calendar(ctx, tasks));
   if (view === "kanban") return h("div", { class: "form" }, head, switcher, kanban(ctx, tasks));
+  if (view === "etapes") return h("div", { class: "form" }, head, switcher, roadmap(ctx, tasks));
 
   const counts = { all: tasks.length, todo: 0, doing: 0, done: 0 };
   for (const t of tasks) counts[t.status] += 1;
@@ -2314,7 +2322,7 @@ async function guestsPanel(ctx, view) {
       h("div", { class: "kpi" }, h("span", { class: "v" }, String(totals.attending)), h("span", { class: "l" }, "personnes confirmées")),
       h("div", { class: "kpi" }, h("span", { class: "v" }, String(totals.no)), h("span", { class: "l" }, "foyers absents")),
       h("div", { class: "kpi" }, h("span", { class: "v" }, String(totals.pending)), h("span", { class: "l" }, "sans réponse"))),
-    guests.length ? h("ul", { class: "list card-flat" }, guests.map(row)) : h("div", { class: "card empty" }, "Aucun invité pour l'instant."),
+    guests.length ? h("ul", { class: "list card-flat" }, guests.map(row)) : photoEmpty("celebration", "Aucun invité pour l'instant.", "Ajoutez vos foyers invités ci-dessous : chacun recevra son lien personnel et répondra sans créer de compte."),
     form,
     h("p", { class: "muted small" }, "« Partager » affiche le QR code et le lien du foyer. Rappels automatiques : prévus plus tard."));
 }
@@ -2564,6 +2572,7 @@ async function homeScreen() {
             families.length ? h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer") : null),
           listBox),
         spotlight,
+        families.length ? inspirations() : null,
         pastBox),
       events.length ? aside : null),
   );
@@ -2592,7 +2601,7 @@ async function myTasksScreen() {
         h("span", {}, events.length ? "Les tâches se créent dans chaque événement (onglet Tâches)." : "Créez ou rejoignez un événement pour commencer.")));
   };
   draw();
-  return { node: screen(header("Mes tâches"), box), title: "Mes tâches", nav: "tasks" };
+  return { node: screen(rubricBanner("womenWax", "Mes tâches", "Ce qui vous attend dans vos prochains événements."), box), title: "Mes tâches", nav: "tasks" };
 }
 
 // ─── Rubrique « Budget » de la barre (budget de chaque événement) ────────
@@ -2610,7 +2619,7 @@ async function myBudgetScreen() {
       h("span", { class: "chev", "aria-hidden": "true" }, "›"));
   });
   return {
-    node: screen(header("Budget"), cards.length ? h("div", { class: "form" }, cards, h("p", { class: "muted small" }, "Contributions confirmées par rapport au budget prévu de chaque événement."))
+    node: screen(rubricBanner("weddingHands", "Budget", "Où en est le financement de chacun de vos événements."), cards.length ? h("div", { class: "form" }, cards, h("p", { class: "muted small" }, "Contributions confirmées par rapport au budget prévu de chaque événement."))
       : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement."), h("span", {}, "Le budget se gère dans chaque événement."))),
     title: "Budget", nav: "budget",
   };
@@ -2749,7 +2758,8 @@ const HELP = {
     "Rien n'est définitif : tout se modifie ensuite. Vous en serez l'organisateur, et seuls les participants choisis verront l'événement."]],
   overview: ["Le tableau de bord de l'événement", [
     "L'essentiel en un coup d'œil : le nombre de jours avant le grand jour, l'avancement de l'organisation (tâches terminées), les invités confirmés, les tâches restantes, le budget et les contributions confirmées.",
-    "Les onglets donnent accès au détail : Tâches, Budget, Invités (organisateurs) et Participants. L'organisateur modifie les informations avec « Modifier »."]],
+    "Les onglets donnent accès au détail : Tâches, Budget, Invités (organisateurs) et Participants. L'organisateur modifie les informations avec « Modifier ».",
+    "Plus bas : le programme heure par heure du jour J, les étapes franchies (badges qui se débloquent au fil de l'organisation) et « Save the date », une image à partager sur WhatsApp pour annoncer la date."]],
   tasks: ["Les tâches", [
     "La liste de tout ce qu'il reste à faire, avec son échéance, son responsable et son statut (À faire, En cours, Terminée). Cochez une tâche pour la terminer.",
     "L'organisateur crée et attribue les tâches ; il peut ajouter d'un clic une checklist adaptée à la cérémonie. Le responsable d'une tâche peut changer son statut. Les vues Calendrier et Kanban montrent les mêmes tâches autrement."]],
@@ -2759,6 +2769,9 @@ const HELP = {
   kanban: ["La vue Kanban", [
     "Les tâches rangées en trois colonnes : À faire, En cours, Terminée. Utilisez les boutons de chaque carte pour la faire passer d'une colonne à l'autre.",
     "Pratique pour voir d'un coup ce qui avance et ce qui bloque."]],
+  roadmap: ["La feuille de route", [
+    "Les tâches rangées par période avant le jour J : plus de 2 mois, 1 à 2 mois, le dernier mois, la dernière semaine, le jour J. Chaque période montre son avancement.",
+    "Idéal pour voir si l'on est en avance ou en retard sur le calendrier de la cérémonie."]],
   "task-new": ["Nouvelle tâche", [
     "Donnez un titre clair, une échéance si possible et un responsable parmi les participants. Le responsable verra la tâche dans « Mes tâches » et pourra changer son statut."]],
   task: ["Détail d'une tâche", [
@@ -2819,7 +2832,7 @@ function helpKeyFor(path) {
   if (head === "nouvel-evenement") return "new-event";
   if (head === "evenement") {
     if (!t) return "overview";
-    if (t === "taches") return sub === "calendrier" ? "calendar" : sub === "kanban" ? "kanban" : sub === "nouvelle" ? "task-new" : "tasks";
+    if (t === "taches") return sub === "calendrier" ? "calendar" : sub === "kanban" ? "kanban" : sub === "etapes" ? "roadmap" : sub === "nouvelle" ? "task-new" : "tasks";
     if (t === "tache") return "task";
     if (t === "budget") return sub === "contributions" ? "budget-contributions" : sub === "depense" ? "expense" : ["contribuer", "contribution"].includes(sub) ? "contribution" : sub === "don-recu" ? "gift" : "budget-expenses";
     if (t === "invites") return sub === "carton" ? "card" : sub === "partager" ? "share" : "guests";
@@ -2857,7 +2870,7 @@ function helpBox(key) {
 function insertHelp(node, path) {
   const box = helpBox(helpKeyFor(path));
   if (!box || !node.querySelector) return;
-  const anchor = node.querySelector(":scope > nav.tabs") ?? node.querySelector(":scope > .screen-head, :scope > .hello, :scope > .family-head, :scope > .auth-brand");
+  const anchor = node.querySelector(":scope > nav.tabs") ?? node.querySelector(":scope > .screen-head, :scope > .hello, :scope > .family-head, :scope > .auth-brand, :scope > .rubric-banner");
   if (anchor) anchor.after(box); else node.prepend(box);
 }
 
@@ -3125,6 +3138,212 @@ async function deleteAccountScreen() {
   return { node: screen(header("Supprimer mon compte", "#/plus"), body), title: "Supprimer mon compte", nav: "more" };
 }
 
+/* ---------- Fonctionnalités originales (06/11/2026) : compte à rebours vivant, étapes franchies,
+   « Save the date » à partager, programme du jour J, feuille de route, inspirations ---------- */
+
+// ─── Compte à rebours vivant ─────────────────────────────────────────────
+function liveCountdown(event) {
+  if (!event.startsAt) return null;
+  const parts = { d: h("strong", {}), h: h("strong", {}), m: h("strong", {}), s: h("strong", {}) };
+  const unit = (el, label) => h("span", { class: "cd-unit" }, el, h("span", {}, label));
+  const caption = h("p", { class: "cd-caption" });
+  const box = photoBackground(h("section", { class: "countdown", "aria-label": "Compte à rebours avant l'événement" },
+    h("p", { class: "cd-title" }, "Le grand jour approche"),
+    h("div", { class: "cd-row", "aria-hidden": "true" }, unit(parts.d, "jours"), unit(parts.h, "heures"), unit(parts.m, "min"), unit(parts.s, "s")),
+    caption), coverOf(event), 1000, 420, "linear-gradient(135deg, rgba(76,29,149,.88), rgba(30,15,69,.82))");
+  const tick = () => {
+    if (!box.isConnected && box.dataset.started) return clearInterval(timer);
+    box.dataset.started = "1";
+    let ms = event.startsAt.getTime() - Date.now();
+    if (ms <= 0) {
+      box.querySelector(".cd-row").replaceChildren(h("span", { class: "cd-today" }, daysUntil(event.startsAt) === 0 ? "C'est aujourd'hui ! 🎉" : "Événement passé"));
+      caption.textContent = formatDate(event.startsAt);
+      return clearInterval(timer);
+    }
+    const d = Math.floor(ms / 86400000); ms -= d * 86400000;
+    const hh = Math.floor(ms / 3600000); ms -= hh * 3600000;
+    const mm = Math.floor(ms / 60000); ms -= mm * 60000;
+    parts.d.textContent = d; parts.h.textContent = String(hh).padStart(2, "0"); parts.m.textContent = String(mm).padStart(2, "0"); parts.s.textContent = String(Math.floor(ms / 1000)).padStart(2, "0");
+    caption.textContent = `${formatDate(event.startsAt)} à ${event.startsAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}${event.city ? ` · ${event.city}` : ""}`;
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+  return box;
+}
+
+// ─── Étapes franchies : badges calculés à partir des vraies données ─────
+function milestones(event, tasks, summary, hasInvitation) {
+  const done = tasks.filter((t) => t.status === "done").length;
+  const progress = tasks.length ? done / tasks.length : 0;
+  const b = summary.budget, g = summary.guests;
+  const list = [
+    ["🎬", "C'est parti", "Événement créé", true],
+    ["📅", "Date fixée", "La date est choisie", Boolean(event.startsAt)],
+    ["📝", "Plan d'action", "Au moins 5 tâches prévues", tasks.length >= 5],
+    ["✅", "Premier pas", "Une tâche terminée", done >= 1],
+    ["🌓", "À mi-chemin", "La moitié des tâches faites", progress >= 0.5],
+    ["🏁", "Tout est prêt", "Toutes les tâches terminées", tasks.length > 0 && done === tasks.length],
+    ["🤝", "Solidarité", "Première contribution confirmée", Boolean(b && b.contributors >= 1)],
+    ["💰", "À moitié financé", "50 % du budget couvert", Boolean(b && event.budgetPlanned && b.confirmed >= event.budgetPlanned / 2)],
+    ["💌", "Invitations prêtes", "Carton publié", hasInvitation],
+    ["🎉", "Ils viennent !", "Premiers invités confirmés", Boolean(g && g.attending >= 1)],
+  ];
+  const got = list.filter((x) => x[3]).length;
+  return h("section", { class: "card" },
+    h("div", { class: "section-head" }, h("h2", {}, "Étapes franchies"), h("span", { class: "chip chip-gold" }, `${got} / ${list.length}`)),
+    h("ul", { class: "badges" }, list.map(([ico, title, sub, ok]) => h("li", { class: ok ? "on" : "", title: sub },
+      h("span", { class: "b-ico", "aria-hidden": "true" }, ico), h("strong", {}, title), h("span", {}, ok ? sub : `À venir : ${sub.toLowerCase()}`)))));
+}
+
+// ─── « Save the date » : une image à partager sur WhatsApp ───────────────
+async function makeSaveTheDate(event, hosts) {
+  const W = 1080, H = 1350;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  const img = await new Promise((resolve) => {
+    const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => resolve(i); i.onerror = () => resolve(null);
+    i.src = photoUrl(coverOf(event), W, H);
+  });
+  if (img) x.drawImage(img, 0, 0, W, H);
+  const grad = x.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(46,16,101,.55)"); grad.addColorStop(.5, "rgba(46,16,101,.72)"); grad.addColorStop(1, "rgba(30,15,69,.95)");
+  x.fillStyle = grad; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(240,195,90,.85)"; x.lineWidth = 6; x.strokeRect(48, 48, W - 96, H - 96);
+  x.lineWidth = 2; x.strokeRect(66, 66, W - 132, H - 132);
+  await document.fonts?.ready;
+  x.textAlign = "center"; x.fillStyle = "#fbe7b5";
+  x.font = "600 44px Poppins, sans-serif"; x.fillText("SAVE THE DATE", W / 2, 230);
+  x.fillStyle = "#f0c35a"; x.font = "italic 92px Georgia, serif";
+  wrapText(x, hosts || event.title, W / 2, 400, W - 220, 104);
+  x.fillStyle = "#ffffff"; x.font = "500 40px Poppins, sans-serif";
+  x.fillText(EVENT_TYPES[event.type], W / 2, 640);
+  if (event.startsAt) {
+    x.fillStyle = "#f0c35a"; x.font = "800 220px Poppins, sans-serif"; x.fillText(String(event.startsAt.getDate()), W / 2, 900);
+    x.fillStyle = "#ffffff"; x.font = "700 64px Poppins, sans-serif";
+    x.fillText(new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(event.startsAt).toUpperCase(), W / 2, 1000);
+  } else {
+    x.fillStyle = "#ffffff"; x.font = "700 64px Poppins, sans-serif"; x.fillText("Date à venir", W / 2, 940);
+  }
+  if (event.city) { x.fillStyle = "#ede9fe"; x.font = "500 46px Poppins, sans-serif"; x.fillText(event.city, W / 2, 1090); }
+  x.fillStyle = "rgba(255,255,255,.75)"; x.font = "500 30px Poppins, sans-serif"; x.fillText("Invitation à suivre · organisé avec Bennoo", W / 2, 1220);
+  return new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.9));
+}
+function wrapText(x, text, cx, y, maxW, lh) {
+  const words = String(text).split(/\s+/); let line = ""; const lines = [];
+  for (const w of words) { const t = line ? `${line} ${w}` : w; if (x.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+  lines.push(line);
+  lines.slice(0, 3).forEach((l, i) => x.fillText(l, cx, y + i * lh));
+}
+function saveTheDateCard(ctx, invitation) {
+  const { event } = ctx;
+  const preview = h("div", { class: "std-preview" }, h("p", { class: "muted small" }, "Une image à partager sur WhatsApp ou en statut, avec la photo de couverture, la date et la ville."));
+  const make = h("button", { type: "button", class: "btn btn-primary btn-block" }, "✨ Créer mon « Save the date »");
+  make.addEventListener("click", () => withBusy(make, async () => {
+    const blob = await makeSaveTheDate(event, invitation?.hosts);
+    if (!blob) { toast("Image impossible à créer sur ce navigateur."); return; }
+    const url = URL.createObjectURL(blob);
+    const file = new File([blob], "save-the-date-bennoo.jpg", { type: "image/jpeg" });
+    const share = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Partager");
+    share.addEventListener("click", async () => {
+      try {
+        if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: event.title, text: `Save the date : ${event.title}` });
+        else toast("Partage direct non disponible : téléchargez l'image puis envoyez-la.");
+      } catch { /* partage annulé */ }
+    });
+    preview.replaceChildren(h("img", { src: url, alt: `Save the date : ${event.title}`, class: "std-img" }),
+      h("div", { class: "row-actions" }, share, h("a", { href: url, download: "save-the-date-bennoo.jpg", class: "btn btn-sm" }, "Télécharger")));
+  }));
+  return h("section", { class: "card form" }, h("h2", {}, "Annoncer la date"), preview, make);
+}
+
+// ─── Programme du jour J (planche 6) ─────────────────────────────────────
+const progRef = (fid, eid) => db.collection("families").doc(fid).collection("events").doc(eid).collection("programme");
+async function listProgramme(fid, eid) {
+  const s = await progRef(fid, eid).get();
+  return s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.time.localeCompare(b.time));
+}
+async function programmeSection(ctx) {
+  const { fid, eid, isOrganizer } = ctx;
+  const items = await listProgramme(fid, eid).catch(() => []);
+  const list = h("ol", { class: "timeline" }, items.map((p) => {
+    let del = null;
+    if (isOrganizer) {
+      del = h("button", { type: "button", class: "link-btn small", "aria-label": `Retirer ${p.title}` }, "Retirer");
+      del.addEventListener("click", async () => { try { await progRef(fid, eid).doc(p.id).delete(); reload(); } catch (err) { toast(errMsg(err)); } });
+    }
+    return h("li", {}, h("span", { class: "tl-time" }, p.time.replace(":", " h ")),
+      h("div", { class: "tl-body" }, h("strong", {}, p.title), p.place ? h("span", { class: "muted small" }, `📍 ${p.place}`) : null), del);
+  }));
+  let form = null;
+  if (isOrganizer) {
+    form = h("form", { class: "prog-form", novalidate: true },
+      h("input", { name: "time", type: "time", class: "input", required: true, "aria-label": "Heure" }),
+      h("input", { name: "title", class: "input", maxlength: 80, required: true, placeholder: "Ex. Accueil des invités", "aria-label": "Moment" }),
+      h("input", { name: "place", class: "input", maxlength: 80, placeholder: "Lieu (facultatif)", "aria-label": "Lieu" }),
+      h("button", { type: "submit", class: "btn btn-primary btn-sm" }, "Ajouter"));
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const v = values(form);
+      const title = v.title.replace(/\s+/g, " ").trim();
+      if (!/^\d{2}:\d{2}$/.test(v.time) || !title) { toast("Indiquez une heure et un moment."); return; }
+      await withBusy(form.querySelector("button"), async () => {
+        try { await progRef(fid, eid).add({ time: v.time, title, place: v.place.trim() || null, createdBy: auth.currentUser.uid, createdAt: serverTimestamp() }); reload(); } catch (err) { toast(errMsg(err)); }
+      });
+    });
+  }
+  return h("section", { class: "card form" },
+    h("div", { class: "section-head" }, h("h2", {}, "Programme du jour J"), items.length ? h("span", { class: "chip chip-violet" }, plural(items.length, "moment")) : null),
+    items.length ? list : h("p", { class: "muted small" }, isOrganizer ? "Déroulez la journée heure par heure : accueil, cérémonie, repas, sabar… Tous les participants le verront." : "L'organisateur n'a pas encore établi le programme."),
+    form);
+}
+
+// ─── Feuille de route : les tâches par période avant le jour J ──────────
+function roadmap(ctx, tasks) {
+  const { event } = ctx;
+  if (!event.startsAt) return h("div", { class: "card empty" }, "La feuille de route apparaît dès que la date de l'événement est fixée.");
+  const phases = [
+    ["Plus de 2 mois avant", "🌱", (d) => d > 60], ["1 à 2 mois avant", "📋", (d) => d > 30 && d <= 60],
+    ["Le dernier mois", "⏳", (d) => d > 7 && d <= 30], ["La dernière semaine", "🔥", (d) => d > 0 && d <= 7],
+    ["Le jour J et après", "🎉", (d) => d <= 0],
+  ];
+  const before = (t) => Math.round((event.startsAt - t.dueAt) / 86400000);
+  const blocks = phases.map(([title, ico, test]) => {
+    const list = tasks.filter((t) => t.dueAt && test(before(t)));
+    if (!list.length) return null;
+    const done = list.filter((t) => t.status === "done").length;
+    const bar = h("div", { class: "bar" }, h("span", {})); bar.firstChild.style.width = `${pct(done, list.length)}%`;
+    return h("section", { class: `phase${done === list.length ? " complete" : ""}` },
+      h("div", { class: "phase-head" }, h("span", { class: "phase-ico", "aria-hidden": "true" }, ico),
+        h("div", { class: "grow" }, h("h3", {}, title), h("span", { class: "muted small" }, `${done} / ${list.length} terminée${done > 1 ? "s" : ""}`)), bar),
+      h("ul", { class: "list" }, list.map((t) => taskItem(ctx, t))));
+  }).filter(Boolean);
+  const noDate = tasks.filter((t) => !t.dueAt);
+  return h("div", { class: "roadmap" }, blocks.length ? blocks : h("div", { class: "card empty" }, "Aucune tâche avec une échéance."),
+    noDate.length ? h("p", { class: "muted small" }, `${plural(noDate.length, "tâche")} sans échéance (visibles dans la liste).`) : null);
+}
+
+// ─── Inspirations : préparer un événement à partir d'une photo ───────────
+function inspirations() {
+  const items = [["WEDDING", "Un mariage"], ["NAMING_CEREMONY", "Un baptême"], ["BIRTHDAY", "Un anniversaire"], ["FAMILY_REUNION", "Une réunion de famille"],
+    ["RELIGIOUS_CEREMONY", "Une cérémonie religieuse"], ["TRADITIONAL_CEREMONY", "Une cérémonie traditionnelle"], ["COMMUNION", "Une communion"]];
+  return h("section", { class: "inspire" },
+    h("div", { class: "section-head" }, h("h2", {}, "Préparer…"), h("span", { class: "muted small" }, "checklist adaptée incluse")),
+    h("div", { class: "inspire-row" }, items.map(([type, label]) => h("a", { href: `#/nouvel-evenement/type/${type}`, class: "inspire-card" },
+      photo(COVERS[type][0], 360, 460), h("span", { class: "inspire-label" }, h("span", { "aria-hidden": "true" }, EVENT_ICONS[type]), label)))));
+}
+
+/** Bandeau photo en tête des rubriques « Mes tâches » et « Budget ». */
+function rubricBanner(key, title, text) {
+  return photoBackground(h("section", { class: "rubric-banner" }, h("h1", {}, title), h("p", {}, text)), key, 1000, 360,
+    "linear-gradient(90deg, rgba(46,16,101,.9), rgba(46,16,101,.35))");
+}
+
+/** État vide illustré. */
+function photoEmpty(key, title, text, action = null) {
+  return h("div", { class: "card photo-empty" }, h("div", { class: "pe-photo", "aria-hidden": "true" }, photo(key, 640, 300)),
+    h("div", { class: "form" }, h("strong", {}, title), text ? h("p", { class: "muted small" }, text) : null, action));
+}
+
 // ─── 13. Paramètres et profil ─────────────────────────────────────────────
 async function settingsScreen() {
   const profile = await data.getProfile();
@@ -3249,7 +3468,7 @@ async function route() {
   if (head === "familles") return render(familiesScreen());
   if (head === "famille" && a && b === "membre" && parts[3]) return render(memberScreen(a, parts[3]));
   if (head === "famille" && a) return render(familyScreen(a, b));
-  if (head === "nouvel-evenement") return render(newEventScreen(a));
+  if (head === "nouvel-evenement") return render(a === "type" ? newEventScreen(null, b) : newEventScreen(a));
   if (head === "evenement" && a && b) return render(eventScreen(a, b, parts[3], parts[4], parts[5]));
   if (head === "rejoindre" && a && b) return render(joinScreen(a, b));
   if (head === "taches") return render(myTasksScreen());
