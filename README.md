@@ -104,6 +104,9 @@ dans les maquettes. Sur ordinateur, elle devient une barre latérale violette (m
 | Bandeaux photo des rubriques Mes tâches et Budget, états vides illustrés | Tâches, Budget, Invités |
 | **Aide intégrée** : encadré repliable « À quoi sert cette page ? » en haut de chaque page (textes dans `HELP`, js/app.js) ; choix replié/ouvert mémorisé sur l'appareil | Toutes les pages |
 | **Page de bienvenue** : but de Bennoo, 5 étapes, vie privée ; affichée une fois après la première connexion sur l'appareil, puis depuis Plus → Guide de Bennoo | `#/bienvenue` |
+| **Album photos de l'événement** : onglet Souvenirs → Album ; chaque participant ajoute jusqu'à 20 photos d'un coup (légende facultative), agrandit, télécharge, retire les siennes ; l'organisateur peut tout retirer | `#/evenement/…/souvenirs` |
+| **Livre d'or (messages et témoignages)** : onglet Souvenirs → Messages ; les participants publient directement ; les invités écrivent depuis leur lien de réponse et l'organisateur publie ou écarte leur message | `#/evenement/…/souvenirs/messages`, page de réponse |
+| **Messages de la famille** : onglet Messages de chaque famille, lu par tous ses membres ; l'auteur ou un administrateur supprime | `#/famille/…/messages` |
 | **Langues : français, anglais, wolof (bêta)** — choix sur l'appareil (Paramètres, écran de lancement, connexion, inscription, page de réponse des invités). Le code reste en français ; `js/i18n.js` traduit à l'affichage grâce aux dictionnaires `js/i18n/en.js` (≈ 870 textes + motifs pour les phrases avec nombres ou noms) et `js/i18n/wo.js` (≈ 430 textes de l'interface). Texte absent du dictionnaire = reste en français. Dates, heures et montants suivent la langue (mois et jours en wolof). Vérifier la couverture : `node outils/i18n-couverture.js en` (ou `wo`) | Partout |
 | Visuel revu le 04/11/2026 : fond blanc, cartes fines, accueil comme la maquette 4 (photo + barre d'avancement, activité récente sur ordinateur seulement), bandeau photo de l'événement avec le titre dessous (maquette 7), tête de famille à photo ronde (maquette 5), chiffres courts « 4 200 000 F », anneau du budget coloré par provenance, lancement « Commencer » + « Déjà un compte ? Se connecter » | Partout |
 
@@ -196,6 +199,7 @@ users/{uid}                                       profil : nom affiché, télép
 families/{famille}                                nom, créateur, date de création
 families/{famille}/members/{uid}                  rôle (owner, admin, member), nom, date d'arrivée
 families/{famille}/invites/{jeton}                lien d'invitation : nom de la famille, expiration
+families/{famille}/posts/{id}                     message à la famille : texte, auteur, photo de l'auteur, date
 families/{famille}/events/{événement}             type, titre, description, date, lieu, ville,
                                                   devise, budget prévu, invités prévus, statut
 families/{famille}/events/{événement}/participants/{uid}   rôle (organizer, treasurer, member), nom
@@ -207,9 +211,20 @@ families/{famille}/events/{événement}/participants/{uid}   rôle (organizer, t
   …/contributions/{id}/private/identity           qui a contribué (contributeur et trésorier seulement)
   …/summary/budget, …/summary/guests              totaux partagés avec tous les participants
   …/committees/{id}                               comité : nom, membres
-  …/guests/{jeton}                                foyer, téléphone, places, réponse, nombre présent, mot
+  …/guests/{jeton}                                foyer, téléphone, places, réponse, nombre présent, mot,
+                                                  message pour le livre d'or (wish, wishState : pending / published / hidden)
+  …/photos/{id}                                   album : miniature JPEG (< 80 000 caractères), légende, auteur, taille
+  …/photos/{id}/full/image                        album : grande image JPEG (< 900 000 caractères), lue à l'ouverture
+  …/messages/{id}                                 livre d'or : texte, auteur, kind (participant / guest)
   …/public/invitation                             carton : titre, type, date, lieu, qui invite, message
 ```
+
+**Photos sans Cloud Storage** (décision du 06/11/2026) : Cloud Storage exige l'offre Blaze depuis le
+3 février 2026. Les photos sont donc réduites dans le navigateur (≈ 1 600 px pour l'affichage, ≈ 420 px
+pour la miniature) et rangées dans Firestore. Avantages : gratuit, aucune configuration, mêmes règles de
+sécurité que le reste. Limites : qualité réduite (pas l'original), 1 Go gratuit au total (≈ 3 000 à
+5 000 photos), chaque ouverture d'album lit les miniatures (48 par page). Alternative : passer en Blaze
+et utiliser Cloud Storage (originaux, quotas plus larges, mais carte bancaire et règles Storage en plus).
 
 Les totaux partagés (`summary`) sont recalculés par l'organisateur ou le trésorier chaque fois qu'il
 ouvre l'aperçu, le budget ou les invités : un simple membre voit donc les chiffres de la dernière visite
