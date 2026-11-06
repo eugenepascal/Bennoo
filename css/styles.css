@@ -608,3 +608,11 @@ details.archived[open] summary { margin-bottom: 8px; }
 .swatch-photo { background: linear-gradient(180deg, #c9b8e8 0 45%, #fff 45%); color: var(--violet-950); border-color: var(--line); }
 .swatch-wax { background: repeating-linear-gradient(45deg, #fde7c6 0 8px, #f7d9a8 8px 16px); color: #7c2d12; box-shadow: inset 0 0 0 4px #b45309; }
 .swatch-ivoire { background: linear-gradient(160deg, #fffdf7, #f3e6c8); color: #6b5320; box-shadow: inset 0 0 0 2px #d9b96a; }
+/* Les anciennes couleurs claires du carton ne valent que pour le modèle Royal */
+.theme-photo :is(.inv-lead, .inv-title, .inv-time, .inv-place, .inv-message, .inv-month, .inv-guest),
+.theme-wax :is(.inv-lead, .inv-title, .inv-time, .inv-place, .inv-message, .inv-month, .inv-guest),
+.theme-ivoire :is(.inv-lead, .inv-title, .inv-time, .inv-place, .inv-message, .inv-month, .inv-guest) { color: inherit; border-top: 0; }
+.theme-photo .inv-title { color: var(--violet-950); }
+.theme-photo .inv-time, .theme-ivoire .inv-time { color: #a67c1f; }
+.theme-wax .inv-time { color: #b45309; }
+.inv-guest { border-top: 0 !important; }
