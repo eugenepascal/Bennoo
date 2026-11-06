@@ -2646,18 +2646,6 @@ async function homeScreen() {
     h("div", { class: "section-head" }, h("h2", {}, "Mes prochaines tâches"), h("a", { href: "#/taches", class: "small" }, "Tout voir")),
     h("ul", { class: "list task-cards" }, myTasks.slice(0, 3).map(({ t, ctx }) => taskItem(ctx, t)))) : null;
 
-  // ─── Version ordinateur : chiffres clés du prochain événement (maquette 14) ───
-  let spotlight = null;
-  if (next) {
-    const { e, summary, left } = next;
-    const kpi = (v, l) => h("div", { class: "kpi" }, h("span", { class: "v sm" }, v), h("span", { class: "l" }, l));
-    spotlight = h("div", { class: "kpi-row four desk-only" },
-      kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
-      kpi(String(left), "Tâches restantes"),
-      kpi(e.budgetPlanned ? kpiAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
-      kpi(summary.budget ? String(summary.budget.contributors) : "—", "Contributions"));
-  }
-
   const listBox = upcoming.length === 0
     ? photoEmpty("celebration", "Aucun événement à venir.", "Créez-en un : vous en serez l'organisateur, avec une checklist adaptée à la cérémonie.",
       h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-block" }, "+ Créer un événement"))
@@ -2682,7 +2670,7 @@ async function homeScreen() {
 
   const node = screen(head,
     h("div", { class: "home-grid" },
-      h("div", { class: "home-main" }, hero, spotlight, quick, tasksBox, listBox, inspirations(), pastBox),
+      h("div", { class: "home-main" }, hero, quick, tasksBox, listBox, inspirations(), pastBox),
       events.length ? aside : null));
   return { node, title: "Accueil", nav: "home" };
 }
