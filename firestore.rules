@@ -39,6 +39,8 @@ service cloud.firestore {
     function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function optText(v, max) { return v == null || text(v, 0, max); }
     // Photo de profil : petite image JPEG en base64 (moins de 70 000 caractères, environ 50 Ko).
+    // Photo d'album : JPEG en base64 (miniature < 80 000 caractères, grande image < 900 000).
+    function validImage(v, max) { return v is string && v.size() < max && v.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$'); }
     function validPhoto(v) { return v == null || (v is string && v.size() < 70000 && v.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')); }
 
     function familyPath(fid) { return /databases/$(database)/documents/families/$(fid); }
@@ -149,6 +151,17 @@ service cloud.firestore {
       }
 
       // ─── Événements : visibles par leurs seuls participants ────────────────
+      // ─── Messages de la famille : lus par tous les membres ──
+      match /posts/{postId} {
+        allow read: if verified() && isFamilyMember(fid);
+        allow create: if verified() && isFamilyMember(fid)
+          && data().keys().hasOnly(['text', 'authorName', 'authorPhoto', 'uid', 'createdAt'])
+          && text(data().text, 1, 1000) && text(data().authorName, 1, 80) && validPhoto(data().authorPhoto)
+          && data().uid == me() && data().createdAt == request.time;
+        allow delete: if verified() && isFamilyMember(fid) && (resource.data.uid == me() || isFamilyAdmin(fid));
+        allow update: if false;
+      }
+
       match /events/{eid} {
         function validEvent() {
           return data().keys().hasOnly(['type', 'title', 'description', 'startsAt', 'venue', 'city',
@@ -350,16 +363,56 @@ service cloud.firestore {
           allow delete: if verified() && isOrganizer(fid, eid);
         }
 
+        // ─── Album photos : miniature ici, grande image dans full/image (même lot d'écriture) ──
+        match /photos/{photoId} {
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && isParticipant(fid, eid)
+            && data().keys().hasOnly(['thumb', 'caption', 'width', 'height', 'uid', 'authorName', 'createdAt'])
+            && validImage(data().thumb, 80000) && optText(data().caption, 140)
+            && data().width is int && data().height is int && data().width > 0 && data().height > 0
+            && data().width <= 4000 && data().height <= 4000
+            && text(data().authorName, 1, 80) && data().uid == me() && data().createdAt == request.time
+            && existsAfter(/databases/$(database)/documents/families/$(fid)/events/$(eid)/photos/$(photoId)/full/image);
+          allow delete: if verified() && isParticipant(fid, eid) && (resource.data.uid == me() || isOrganizer(fid, eid));
+          allow update: if false;
+
+          match /full/{imageId} {
+            allow read: if verified() && isParticipant(fid, eid);
+            allow create: if verified() && isParticipant(fid, eid) && imageId == 'image'
+              && data().keys().hasOnly(['data', 'uid']) && data().uid == me() && validImage(data().data, 900000)
+              && getAfter(/databases/$(database)/documents/families/$(fid)/events/$(eid)/photos/$(photoId)).data.uid == me();
+            allow delete: if verified() && isParticipant(fid, eid) && (resource.data.uid == me() || isOrganizer(fid, eid));
+            allow update: if false;
+          }
+        }
+
+        // ─── Livre d'or : messages des participants, et messages d'invités publiés par l'organisateur ──
+        match /messages/{messageId} {
+          function validMessage() {
+            return data().keys().hasOnly(['kind', 'text', 'authorName', 'authorPhoto', 'uid', 'createdBy', 'createdAt'])
+              && text(data().text, 1, 1000) && text(data().authorName, 1, 120) && validPhoto(data().authorPhoto)
+              && data().createdBy == me() && data().createdAt == request.time;
+          }
+          allow read: if verified() && isParticipant(fid, eid);
+          allow create: if verified() && isParticipant(fid, eid) && validMessage() && (
+            (data().kind == 'participant' && data().uid == me())
+            || (data().kind == 'guest' && data().uid == null && isOrganizer(fid, eid)));
+          allow delete: if verified() && isParticipant(fid, eid)
+            && ((resource.data.uid != null && resource.data.uid == me()) || isOrganizer(fid, eid));
+          allow update: if false;
+        }
+
         // ─── Invités : liste réservée aux organisateurs ; réponse sans compte ──
         // L'identifiant du document est un jeton secret de 43 caractères : qui a le lien
         // peut lire SON invitation et y répondre, rien d'autre.
         match /guests/{token} {
           function validGuest() {
-            return data().keys().hasOnly(['household', 'phone', 'seats', 'response', 'attending', 'message', 'respondedAt', 'createdBy', 'createdAt'])
+            return data().keys().hasOnly(['household', 'phone', 'seats', 'response', 'attending', 'message', 'respondedAt', 'createdBy', 'createdAt', 'wish', 'wishState', 'wishAt'])
               && text(data().household, 1, 120)
               && (data().phone == null || (data().phone is string && data().phone.matches('^\\+[1-9][0-9]{6,14}$')))
               && data().seats is int && data().seats >= 1 && data().seats <= 50
-              && data().response in ['pending', 'yes', 'no'] && optText(data().message, 500);
+              && data().response in ['pending', 'yes', 'no'] && optText(data().message, 500)
+              && optText(data().get('wish', null), 1000) && data().get('wishState', null) in [null, 'pending', 'published', 'hidden'];
           }
           allow get: if true;
           allow list: if verified() && isOrganizer(fid, eid);
@@ -371,6 +424,13 @@ service cloud.firestore {
             (changed().hasOnly(['response', 'attending', 'message', 'respondedAt']) && data().respondedAt == request.time
               && ((data().response == 'yes' && data().attending is int && data().attending >= 1 && data().attending <= data().seats)
                 || (data().response == 'no' && data().attending == 0)))
+            // l'invité laisse (ou corrige) un message pour le livre d'or, tant qu'il n'est pas publié
+            || (changed().hasOnly(['wish', 'wishState', 'wishAt']) && text(data().wish, 1, 1000)
+              && data().wishState == 'pending' && data().wishAt == request.time
+              && resource.data.get('wishState', null) != 'published')
+            // l'organisateur publie ou écarte ce message
+            || (verified() && isOrganizer(fid, eid) && changed().hasOnly(['wishState'])
+              && data().wishState in ['published', 'hidden'] && resource.data.get('wish', null) != null)
             // l'organisateur corrige le foyer
             || (verified() && isOrganizer(fid, eid) && changed().hasOnly(['household', 'phone', 'seats'])
               && (data().attending == null || data().attending <= data().seats))

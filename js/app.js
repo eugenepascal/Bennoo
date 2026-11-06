@@ -471,7 +471,7 @@ const orga = (() => {
   }
 
   // ─── Invités et carton d'invitation ───
-  const toGuest = (d) => ({ token: d.id, ...d.data(), respondedAt: toDate(d.data().respondedAt) });
+  const toGuest = (d) => ({ token: d.id, ...d.data(), respondedAt: toDate(d.data().respondedAt), wishAt: toDate(d.data().wishAt) });
   async function listGuests(fid, eid) {
     const s = await ev(fid, eid).collection("guests").get();
     return s.docs.map(toGuest).sort((a, b) => a.household.localeCompare(b.household, "fr"));
@@ -898,7 +898,7 @@ const EVENT_ICONS = {
 /**
  * Écrans de l'étape 1, construits d'après les maquettes (dossier maquettes/ du dépôt).
  * Chaque bouton déclenche une vraie action ; aucune donnée d'exemple n'est affichée.
- * Tâches, budget, contributions et invités : voir la section « Étapes 2 à 4 ». L'album viendra plus tard.
+ * Tâches, budget, contributions et invités : voir la section « Étapes 2 à 4 ». Album et messages : section « Souvenirs ».
  */
 
 
@@ -1167,12 +1167,13 @@ async function familyScreen(fid, tab = "membres") {
   const isAdmin = ["owner", "admin"].includes(family.myRole);
   const myUid = auth.currentUser.uid;
   const famEvents = events.filter((e) => e.familyId === fid);
-  const current = tab === "evenements" ? "evenements" : tab === "inviter" ? "inviter" : tab === "comites" ? "comites" : "membres";
+  const current = tab === "evenements" ? "evenements" : tab === "inviter" ? "inviter" : tab === "comites" ? "comites" : tab === "messages" ? "messages" : "membres";
 
-  const tabs = h("div", { class: "tabs", role: "tablist" },
+  const tabs = h("div", { class: "tabs scroll", role: "tablist" },
     h("a", { href: `#/famille/${enc(fid)}/membres`, role: "tab", "aria-selected": String(current === "membres") }, "Membres"),
     h("a", { href: `#/famille/${enc(fid)}/evenements`, role: "tab", "aria-selected": String(current === "evenements") }, "Événements"),
     h("a", { href: `#/famille/${enc(fid)}/comites`, role: "tab", "aria-selected": String(current === "comites") }, "Comités"),
+    h("a", { href: `#/famille/${enc(fid)}/messages`, role: "tab", "aria-selected": String(current === "messages") }, "Messages"),
   );
 
   let body;
@@ -1182,6 +1183,8 @@ async function familyScreen(fid, tab = "membres") {
       h("a", { href: `#/nouvel-evenement/${enc(fid)}`, class: "btn btn-primary btn-block", style: null }, "+ Créer un événement"));
   } else if (current === "comites") {
     body = await familyCommittees(famEvents);
+  } else if (current === "messages") {
+    body = await familyPostsPanel(fid, family, members);
   } else if (current === "inviter") {
     body = isAdmin ? await invitePanel(fid, family.name) : h("div", { class: "card" }, h("p", {}, "Seul un administrateur de la famille peut créer un lien d'invitation."));
   } else {
@@ -1750,7 +1753,7 @@ async function eventOverview(ctx) {
       h("dt", {}, "Invités prévus"), h("dd", {}, event.expectedGuests ?? "—")),
     event.description ? h("p", { class: "muted" }, event.description) : null,
     event.venue || event.city ? mapBlock(() => [event.venue, event.city]) : null),
-    h("p", { class: "muted small" }, "L'album photos arrivera dans une prochaine étape."),
+    souvenirsTeaser(ctx),
   );
 }
 
@@ -2117,7 +2120,7 @@ function expenseForm(ctx, x) {
     field("Catégorie", { name: "category", tag: "select", class: "input", options: Object.entries(EXPENSE_CATEGORIES).map(([k, [l]]) => [k, l]) }),
     field("Fournisseur (facultatif)", { name: "supplier", class: "input", maxlength: 120, value: x?.supplier ?? "" }),
     field("Date", { name: "spentAt", type: "date", class: "input", value: dateInput(x?.spentAt ?? new Date()) }),
-    h("p", { class: "muted small" }, "Justificatifs (factures, photos) : prévus avec l'album, quand le stockage de fichiers sera activé."),
+    h("p", { class: "muted small" }, "Justificatifs (factures, photos) : pas encore disponibles."),
     h("button", { type: "submit", class: "btn btn-primary btn-block" }, x ? "Enregistrer la dépense" : "Ajouter la dépense"));
   form.elements.status.value = x?.status ?? "pending";
   form.elements.category.value = x?.category ?? "VENUE";
@@ -2451,6 +2454,7 @@ async function rsvpScreen(fid, eid, token) {
     h("div", { class: "auth-brand" }, h("img", { src: "images/logo.svg", alt: "" }), h("h1", {}, "Vous êtes invités")),
     invitationCard(inv, guest), status, form,
     h("p", { class: "muted small" }, "Votre réponse est transmise aux seuls organisateurs. Pas besoin de compte."),
+    guestWishCard(fid, eid, token, guest),
     I18N.picker({ compact: true }));
   return { node, title: `Invitation · ${inv.title}` };
 }
@@ -2469,10 +2473,10 @@ async function eventScreen(fid, eid, tab, sub, extra) {
     base: `#/evenement/${enc(fid)}/${enc(eid)}`,
   };
   const { base, isOrganizer } = ctx;
-  const active = ["taches", "tache"].includes(tab) ? "taches" : tab === "budget" ? "budget" : tab === "invites" ? "invites" : tab === "participants" ? "participants" : "apercu";
+  const active = ["taches", "tache"].includes(tab) ? "taches" : tab === "budget" ? "budget" : tab === "invites" ? "invites" : tab === "participants" ? "participants" : tab === "souvenirs" ? "souvenirs" : "apercu";
   const tabs = h("nav", { class: "tabs scroll", "aria-label": "Rubriques de l'événement" },
     [[base, "Aperçu", "apercu"], [`${base}/taches`, "Tâches", "taches"], [`${base}/budget`, "Budget", "budget"],
-      isOrganizer ? [`${base}/invites`, "Invités", "invites"] : null, [`${base}/participants`, "Participants", "participants"]]
+      isOrganizer ? [`${base}/invites`, "Invités", "invites"] : null, [`${base}/souvenirs`, "Souvenirs", "souvenirs"], [`${base}/participants`, "Participants", "participants"]]
       .filter(Boolean).map(([href, label, key]) => h("a", { href, "aria-current": active === key ? "page" : null, "aria-selected": String(active === key) }, label)));
 
   let body;
@@ -2490,6 +2494,7 @@ async function eventScreen(fid, eid, tab, sub, extra) {
   else if (tab === "budget") body = await budgetPanel(ctx, sub);
   else if (tab === "invites" && sub === "partager" && extra && isOrganizer) body = await shareGuestPanel(ctx, extra);
   else if (tab === "invites") body = await guestsPanel(ctx, sub);
+  else if (tab === "souvenirs") body = await souvenirsPanel(ctx, sub, extra);
   else body = await eventOverview(ctx);
 
   const node = screen(
@@ -2506,6 +2511,354 @@ async function eventScreen(fid, eid, tab, sub, extra) {
   return { node, title: event.title, nav: "home" };
 }
 
+/* ---------- Souvenirs (06/11/2026) : album photos et livre d'or de l'événement, messages de la famille ----------
+   Photos : pas de Cloud Storage (il exige l'offre Blaze). Chaque photo est réduite dans le navigateur et
+   rangée dans Firestore en deux documents :
+     events/{eid}/photos/{pid}             miniature (≈ 400 px, < 80 000 caractères) + légende + auteur
+     events/{eid}/photos/{pid}/full/image  photo d'affichage (≈ 1 600 px, < 900 000 caractères), lue à l'ouverture
+   Messages :
+     events/{eid}/messages/{mid}           livre d'or, lu par les participants ; les messages d'invités y sont
+                                           copiés par l'organisateur après validation (champ wish du foyer invité)
+     families/{fid}/posts/{pid}            messages de la famille, lus par tous ses membres */
+const PHOTO_FULL_MAX = 900000;
+const PHOTO_THUMB_MAX = 80000;
+const ALBUM_PAGE = 48;
+const MESSAGE_MAX = 1000;
+
+const souvenirs = (() => {
+  const evRef = (fid, eid) => db.collection("families").doc(fid).collection("events").doc(eid);
+  const toDate = (t) => (t && typeof t.toDate === "function" ? t.toDate() : null);
+  const me = () => auth.currentUser.uid;
+
+  // ─── Album ───
+  async function listPhotos(fid, eid, after = null) {
+    let q = evRef(fid, eid).collection("photos").orderBy("createdAt", "desc").limit(ALBUM_PAGE);
+    if (after) q = q.startAfter(after);
+    const s = await q.get();
+    return { photos: s.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) })), last: s.docs[s.docs.length - 1] ?? null, more: s.size === ALBUM_PAGE };
+  }
+  async function getPhoto(fid, eid, pid) {
+    const d = await evRef(fid, eid).collection("photos").doc(pid).get();
+    return d.exists ? { id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) } : null;
+  }
+  async function getFullImage(fid, eid, pid) {
+    const d = await evRef(fid, eid).collection("photos").doc(pid).collection("full").doc("image").get();
+    return d.exists ? d.data().data : null;
+  }
+  /** Ajout en un seul lot : la miniature et la grande image existent ensemble ou pas du tout. */
+  async function addPhoto(fid, eid, { thumb, full, width, height, caption, authorName }) {
+    const ref = evRef(fid, eid).collection("photos").doc();
+    const batch = db.batch();
+    batch.set(ref, { thumb, caption: caption || null, width, height, uid: me(), authorName, createdAt: serverTimestamp() });
+    batch.set(ref.collection("full").doc("image"), { data: full, uid: me() });
+    await batch.commit();
+    return ref.id;
+  }
+  async function deletePhoto(fid, eid, pid) {
+    const ref = evRef(fid, eid).collection("photos").doc(pid);
+    const batch = db.batch();
+    batch.delete(ref.collection("full").doc("image"));
+    batch.delete(ref);
+    await batch.commit();
+  }
+
+  // ─── Livre d'or de l'événement ───
+  async function listMessages(fid, eid) {
+    const s = await evRef(fid, eid).collection("messages").orderBy("createdAt", "desc").limit(200).get();
+    return s.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) }));
+  }
+  const addMessage = (fid, eid, { text, authorName, authorPhoto }) => evRef(fid, eid).collection("messages").add({
+    kind: "participant", text, authorName, authorPhoto: authorPhoto || null, uid: me(), createdBy: me(), createdAt: serverTimestamp(),
+  });
+  const deleteMessage = (fid, eid, mid) => evRef(fid, eid).collection("messages").doc(mid).delete();
+  /** L'organisateur publie le message d'un foyer invité : copie dans le livre d'or + foyer marqué « publié ». */
+  async function publishGuestWish(fid, eid, guest) {
+    const batch = db.batch();
+    batch.set(evRef(fid, eid).collection("messages").doc(), {
+      kind: "guest", text: guest.wish, authorName: guest.household, authorPhoto: null, uid: null, createdBy: me(), createdAt: serverTimestamp(),
+    });
+    batch.update(evRef(fid, eid).collection("guests").doc(guest.token), { wishState: "published" });
+    await batch.commit();
+  }
+  const hideGuestWish = (fid, eid, token) => evRef(fid, eid).collection("guests").doc(token).update({ wishState: "hidden" });
+  /** Message laissé par un invité depuis son lien (sans compte) : en attente de l'organisateur. */
+  const sendGuestWish = (fid, eid, token, wish) => evRef(fid, eid).collection("guests").doc(token).update({ wish, wishState: "pending", wishAt: serverTimestamp() });
+
+  // ─── Messages de la famille ───
+  const postsRef = (fid) => db.collection("families").doc(fid).collection("posts");
+  async function listPosts(fid) {
+    const s = await postsRef(fid).orderBy("createdAt", "desc").limit(100).get();
+    return s.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: toDate(d.data().createdAt) }));
+  }
+  const addPost = (fid, { text, authorName, authorPhoto }) => postsRef(fid).add({ text, authorName, authorPhoto: authorPhoto || null, uid: me(), createdAt: serverTimestamp() });
+  const deletePost = (fid, pid) => postsRef(fid).doc(pid).delete();
+
+  // ─── Suppression du compte : ce que la personne a publié ───
+  async function deleteMineInEvent(fid, eid) {
+    const ref = evRef(fid, eid);
+    for (const d of (await ref.collection("photos").where("uid", "==", me()).get()).docs) await deletePhoto(fid, eid, d.id);
+    for (const d of (await ref.collection("messages").where("uid", "==", me()).get()).docs) await d.ref.delete();
+  }
+  async function deleteMineInFamily(fid) {
+    for (const d of (await postsRef(fid).where("uid", "==", me()).get()).docs) await d.ref.delete();
+  }
+
+  return { listPhotos, getPhoto, getFullImage, addPhoto, deletePhoto, listMessages, addMessage, deleteMessage, publishGuestWish, hideGuestWish, sendGuestWish, listPosts, addPost, deletePost, deleteMineInEvent, deleteMineInFamily };
+})();
+
+/** Fichier image -> JPEG réduit (côté le plus long ≤ maxSide), qualité baissée jusqu'à tenir sous maxChars. */
+async function shrinkImage(file, maxSide, maxChars) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Image illisible. Essayez une autre photo (JPEG ou PNG)."));
+      i.src = url;
+    });
+    let side = maxSide;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const scale = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale)), hgt = Math.max(1, Math.round(img.naturalHeight * scale));
+      const c = document.createElement("canvas"); c.width = w; c.height = hgt;
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, hgt); x.drawImage(img, 0, 0, w, hgt);
+      for (const q of [0.82, 0.72, 0.6, 0.5]) {
+        const out = c.toDataURL("image/jpeg", q);
+        if (out.length < maxChars) return { data: out, width: w, height: hgt };
+      }
+      side = Math.round(side * 0.8);
+    }
+    throw new Error("Photo trop lourde, essayez-en une autre.");
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const dateTimeShort = (d) => (d ? `${I18N.dateFormat({ day: "numeric", month: "long", year: "numeric" }).format(d)} · ${I18N.time(d)}` : "");
+
+/** Un message (livre d'or ou famille) : avatar, auteur, date, texte, suppression si permise. */
+function messageItem(m, { canDelete, onDelete, badge = null }) {
+  let del = null;
+  if (canDelete) {
+    del = h("button", { type: "button", class: "link-btn small danger", "aria-label": "Supprimer ce message" }, "Supprimer");
+    del.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce message ?")) return;
+      try { await onDelete(); toast("Message supprimé"); reload(); } catch (err) { toast(errMsg(err)); }
+    });
+  }
+  return h("li", { class: "message" },
+    avatar(m.authorName, "", m.authorPhoto),
+    h("div", { class: "grow" },
+      h("p", { class: "msg-head" }, h("strong", {}, m.authorName), badge ? h("span", { class: "chip chip-gold" }, badge) : null, h("span", { class: "muted small" }, relTime(m.createdAt) || "à l'instant")),
+      h("p", { class: "msg-text" }, m.text)),
+    del);
+}
+
+/** Zone d'écriture d'un message (livre d'or ou famille). */
+function messageForm({ label, placeholder, button, onSend }) {
+  const form = h("form", { class: "card form message-form", novalidate: true },
+    field(label, { name: "text", tag: "textarea", class: "input", maxlength: MESSAGE_MAX, rows: 3, placeholder, required: true }),
+    h("button", { type: "submit", class: "btn btn-primary" }, button));
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showFormError(form, null);
+    const text = form.querySelector("[name=text]").value.trim();
+    if (!text) { showFormError(form, "Écrivez un message."); return; }
+    await withBusy(form.querySelector("button"), async () => {
+      try { await onSend(text); toast("Message publié"); reload(); } catch (err) { showFormError(form, errMsg(err)); }
+    });
+  });
+  return form;
+}
+
+function souvenirsTabs(ctx, current) {
+  const { base } = ctx;
+  return h("div", { class: "tabs", role: "tablist" },
+    h("a", { href: `${base}/souvenirs`, role: "tab", "aria-selected": String(current === "album") }, "📸 Album"),
+    h("a", { href: `${base}/souvenirs/messages`, role: "tab", "aria-selected": String(current === "messages") }, "💬 Messages"));
+}
+
+// ─── Album photos de l'événement ──────────────────────────────────────────
+async function albumPanel(ctx) {
+  const { fid, eid, myName } = ctx;
+  const grid = h("div", { class: "album-grid" });
+  const moreBtn = h("button", { type: "button", class: "btn btn-block", hidden: true }, "Voir plus de photos");
+  const count = h("span", { class: "chip chip-violet", hidden: true });
+  let last = null, shown = 0;
+  const tile = (p) => h("a", { href: `${ctx.base}/souvenirs/photo/${enc(p.id)}`, class: "album-tile", "aria-label": p.caption ? `Photo : ${p.caption}` : `Photo de ${p.authorName}` },
+    h("img", { src: p.thumb, alt: "", loading: "lazy", width: p.width, height: p.height }));
+  async function loadMore() {
+    const page = await souvenirs.listPhotos(fid, eid, last);
+    last = page.last; shown += page.photos.length;
+    grid.append(...page.photos.map(tile));
+    moreBtn.hidden = !page.more;
+    count.hidden = shown === 0; count.textContent = page.more ? `${shown}+ photos` : plural(shown, "photo");
+    empty.hidden = shown > 0;
+  }
+  moreBtn.addEventListener("click", () => withBusy(moreBtn, () => loadMore().catch((err) => toast(errMsg(err)))));
+  const empty = h("div", { class: "card empty", hidden: true }, h("span", { class: "big-ico", "aria-hidden": "true" }, "📷"),
+    h("strong", {}, "Aucune photo pour l'instant."), h("span", {}, "Ajoutez les premières photos de l'événement : préparatifs, cérémonie, fête…"));
+
+  // Ajout : plusieurs photos d'un coup, réduites dans le navigateur avant l'envoi.
+  const input = h("input", { type: "file", accept: "image/*", multiple: true, class: "sr-only", id: "album-input" });
+  const caption = h("input", { class: "input", name: "caption", maxlength: 140, placeholder: "Légende (facultatif), ex. La cérémonie du henné", "aria-label": "Légende des photos" });
+  const status = h("p", { class: "muted small", role: "status" });
+  const pick = h("label", { for: "album-input", class: "btn btn-primary btn-block" }, "+ Ajouter des photos");
+  input.addEventListener("change", async () => {
+    const files = [...input.files].filter((f) => f.type.startsWith("image/")).slice(0, 20);
+    input.value = "";
+    if (!files.length) return;
+    pick.classList.add("disabled"); input.disabled = true;
+    let ok = 0;
+    for (const [i, file] of files.entries()) {
+      status.textContent = T(`Envoi de la photo ${i + 1} sur ${files.length}…`);
+      try {
+        const full = await shrinkImage(file, 1600, PHOTO_FULL_MAX);
+        const thumb = await shrinkImage(file, 420, PHOTO_THUMB_MAX);
+        await souvenirs.addPhoto(fid, eid, { thumb: thumb.data, full: full.data, width: thumb.width, height: thumb.height, caption: caption.value.replace(/\s+/g, " ").trim().slice(0, 140), authorName: myName });
+        ok++;
+      } catch (err) { console.error(err); toast(`${file.name} : ${T(errMsg(err))}`); }
+    }
+    pick.classList.remove("disabled"); input.disabled = false;
+    status.textContent = "";
+    if (ok) { toast(ok > 1 ? T(`${ok} photos ajoutées`) : "Photo ajoutée"); caption.value = ""; reload(); }
+  });
+
+  let loadError = null;
+  try { await loadMore(); } catch (err) { console.error(err); loadError = alertBox(errMsg(err)); }
+  return h("div", { class: "form" },
+    loadError,
+    h("section", { class: "card form" },
+      h("div", { class: "section-head" }, h("h2", {}, "Album photos"), count),
+      h("p", { class: "muted small" }, "Les photos sont visibles de tous les participants de l'événement. Chacun peut retirer les siennes ; l'organisateur peut retirer toutes les photos."),
+      caption, input, pick, status),
+    empty, grid, moreBtn);
+}
+
+async function photoView(ctx, pid) {
+  const { fid, eid, base, isOrganizer, myUid } = ctx;
+  const p = await souvenirs.getPhoto(fid, eid, pid);
+  if (!p) return h("div", { class: "card" }, h("p", {}, "Cette photo n'existe plus."), h("a", { href: `${base}/souvenirs`, class: "btn" }, "Retour à l'album"));
+  const img = h("img", { src: p.thumb, alt: p.caption || "", class: "photo-full", width: p.width, height: p.height });
+  const download = h("a", { class: "btn btn-sm", download: `bennoo-${pid}.jpg`, href: p.thumb }, "Télécharger");
+  souvenirs.getFullImage(fid, eid, pid).then((src) => { if (src) { img.src = src; download.href = src; } }).catch(() => {});
+  let del = null;
+  if (p.uid === myUid || isOrganizer) {
+    del = h("button", { type: "button", class: "btn btn-sm danger-btn" }, "Retirer la photo");
+    del.addEventListener("click", async () => {
+      if (!confirm("Retirer cette photo de l'album ?")) return;
+      await withBusy(del, async () => {
+        try { await souvenirs.deletePhoto(fid, eid, pid); toast("Photo retirée"); location.hash = `${base}/souvenirs`; } catch (err) { toast(errMsg(err)); }
+      });
+    });
+  }
+  return h("div", { class: "form" },
+    subHeader("Photo", `${base}/souvenirs`),
+    h("figure", { class: "card photo-view" }, img,
+      h("figcaption", {}, p.caption ? h("strong", {}, p.caption) : null, h("span", { class: "muted small" }, T(`Ajoutée par ${p.authorName}`), " · ", dateTimeShort(p.createdAt)))),
+    h("div", { class: "row-actions" }, download, del));
+}
+
+// ─── Livre d'or de l'événement ────────────────────────────────────────────
+async function messagesPanel(ctx) {
+  const { fid, eid, isOrganizer, myUid, myName, participants } = ctx;
+  const myPhotoData = participants.find((p) => p.uid === myUid)?.photo ?? null;
+  let loadError = null;
+  const [messages, guests] = await Promise.all([
+    souvenirs.listMessages(fid, eid).catch((err) => { console.error(err); loadError = alertBox(errMsg(err)); return []; }),
+    isOrganizer ? orga.listGuests(fid, eid).catch(() => []) : []]);
+  const pending = guests.filter((g) => g.wish && g.wishState === "pending");
+
+  let review = null;
+  if (isOrganizer && pending.length) {
+    review = h("section", { class: "card form review" },
+      h("div", { class: "section-head" }, h("h2", {}, "Messages d'invités à valider"), h("span", { class: "chip chip-gold" }, String(pending.length))),
+      h("p", { class: "muted small" }, "Ces messages ont été laissés depuis les liens d'invitation. Ils ne sont visibles de personne tant que vous ne les publiez pas."),
+      h("ul", { class: "messages" }, pending.map((g) => {
+        const pub = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Publier");
+        const hide = h("button", { type: "button", class: "btn btn-sm" }, "Ne pas publier");
+        pub.addEventListener("click", () => withBusy(pub, async () => { try { await souvenirs.publishGuestWish(fid, eid, g); toast("Message publié"); reload(); } catch (err) { toast(errMsg(err)); } }));
+        hide.addEventListener("click", () => withBusy(hide, async () => { try { await souvenirs.hideGuestWish(fid, eid, g.token); toast("Message écarté"); reload(); } catch (err) { toast(errMsg(err)); } }));
+        return h("li", { class: "message" }, avatar(g.household),
+          h("div", { class: "grow" }, h("p", { class: "msg-head" }, h("strong", {}, g.household), h("span", { class: "muted small" }, relTime(g.wishAt))), h("p", { class: "msg-text" }, g.wish),
+            h("div", { class: "row-actions" }, pub, hide)));
+      })));
+  }
+
+  const form = messageForm({
+    label: "Votre message ou témoignage", placeholder: "Ex. Que Dieu bénisse votre union ! Merci pour cette belle fête…", button: "Publier le message",
+    onSend: (text) => souvenirs.addMessage(fid, eid, { text, authorName: myName, authorPhoto: myPhotoData }),
+  });
+  const list = messages.length
+    ? h("ul", { class: "messages card" }, messages.map((m) => messageItem(m, {
+      badge: m.kind === "guest" ? "Invité" : null,
+      canDelete: m.uid === myUid || isOrganizer,
+      onDelete: () => souvenirs.deleteMessage(fid, eid, m.id),
+    })))
+    : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, "💌"), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Vœux, souvenirs, remerciements : soyez le premier à écrire."));
+  return h("div", { class: "form" },
+    loadError, review, form,
+    h("p", { class: "muted small" }, isOrganizer
+      ? "Les messages sont visibles de tous les participants. Les invités peuvent aussi en laisser un depuis leur lien de réponse : vous les validez ici avant publication."
+      : "Les messages sont visibles de tous les participants de l'événement. Les invités peuvent aussi en laisser un, publié après validation par l'organisateur."),
+    list);
+}
+
+async function souvenirsPanel(ctx, sub, extra) {
+  if (sub === "photo" && extra) return photoView(ctx, extra);
+  const current = sub === "messages" ? "messages" : "album";
+  return h("div", { class: "form" }, souvenirsTabs(ctx, current), current === "messages" ? await messagesPanel(ctx) : await albumPanel(ctx));
+}
+
+/** Sur la page de réponse d'un invité : laisser un message pour le livre d'or. */
+function guestWishCard(fid, eid, token, guest) {
+  if (guest.wishState === "published") {
+    return h("section", { class: "card form" }, h("h2", {}, "Livre d'or"), h("p", {}, "Votre message est publié dans le livre d'or de l'événement. Merci !"), h("p", { class: "msg-text muted" }, guest.wish));
+  }
+  const form = h("form", { class: "card form", novalidate: true },
+    h("h2", {}, "Livre d'or"),
+    h("p", { class: "muted small" }, "Laissez un message ou un témoignage pour l'événement. Il sera visible des organisateurs et de la famille après validation."),
+    guest.wish ? alertBox("Message transmis : vous pouvez encore le modifier tant qu'il n'est pas publié.", "info") : null,
+    field("Votre message", { name: "wish", tag: "textarea", class: "input", maxlength: MESSAGE_MAX, rows: 4, placeholder: "Ex. Tous nos vœux de bonheur !" }),
+    h("button", { type: "submit", class: "btn btn-primary btn-block" }, guest.wish ? "Modifier mon message" : "Envoyer mon message"));
+  form.querySelector("[name=wish]").value = guest.wish ?? "";
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showFormError(form, null);
+    const wish = form.querySelector("[name=wish]").value.trim();
+    if (!wish) { showFormError(form, "Écrivez un message."); return; }
+    await withBusy(form.querySelector("button"), async () => {
+      try { await souvenirs.sendGuestWish(fid, eid, token, wish); toast("Message transmis à l'organisateur"); reload(); } catch (err) { showFormError(form, errMsg(err)); }
+    });
+  });
+  return form;
+}
+
+// ─── Messages de la famille ───────────────────────────────────────────────
+async function familyPostsPanel(fid, family, members) {
+  const myUid = auth.currentUser.uid;
+  const mine = members.find((m) => m.uid === myUid);
+  const isAdmin = ["owner", "admin"].includes(family.myRole);
+  let loadError = null;
+  const posts = await souvenirs.listPosts(fid).catch((err) => { console.error(err); loadError = alertBox(errMsg(err)); return []; });
+  const form = messageForm({
+    label: "Écrire à la famille", placeholder: "Une nouvelle, une annonce, un mot pour tous…", button: "Publier",
+    onSend: (text) => souvenirs.addPost(fid, { text, authorName: mine?.displayName ?? "Moi", authorPhoto: mine?.photo ?? null }),
+  });
+  return h("div", { class: "form" },
+    loadError, form,
+    h("p", { class: "muted small" }, "Visible de tous les membres de la famille. Chacun peut supprimer ses messages ; un administrateur peut supprimer tous les messages."),
+    posts.length
+      ? h("ul", { class: "messages card" }, posts.map((p) => messageItem(p, { canDelete: p.uid === myUid || isAdmin, onDelete: () => souvenirs.deletePost(fid, p.id) })))
+      : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, "💬"), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Donnez des nouvelles, annoncez une date, remerciez : toute la famille vous lira.")));
+}
+
+/** Aperçu de l'événement : accès à l'album et au livre d'or. */
+function souvenirsTeaser(ctx) {
+  return h("a", { href: `${ctx.base}/souvenirs`, class: "card souvenirs-teaser" },
+    h("span", { class: "big-ico", "aria-hidden": "true" }, "📸"),
+    h("span", { class: "grow" }, h("strong", {}, "Souvenirs : album et livre d'or"), h("span", { class: "muted small" }, "Partagez les photos de l'événement et laissez vos messages.")),
+    h("span", { class: "chev", "aria-hidden": "true" }, "›"));
+}
+
 // ─── Écarts avec les maquettes comblés le 30/10/2026 ──────────────────────
 /** Choix de la photo de couverture (maquette 6, « Photo de couverture »). */
 function coverPicker(type, current) {
@@ -2515,7 +2868,7 @@ function coverPicker(type, current) {
     h("div", { class: "cover-grid" }, keys.map((k) => h("label", {},
       h("input", { type: "radio", name: "cover", value: k, checked: k === current }),
       h("span", { class: "cover-tile" }, photo(k, 320, 200), h("span", { class: "sr-only" }, PHOTOS[k][2]))))),
-    h("p", { class: "help" }, "Photos d'illustration libres de droits. L'envoi de vos propres photos viendra avec l'album."));
+    h("p", { class: "help" }, "Photos d'illustration libres de droits. Vos propres photos se partagent dans l'onglet Souvenirs de l'événement."));
 }
 
 /** Carte du lieu (maquette 6 « Lieu et date ») : chargée seulement au clic, pour ne rien envoyer à Google sans action. */
@@ -2944,9 +3297,19 @@ const HELP = {
     "Le nom affiché aux autres membres et votre téléphone, au format international (+221…, +33…). Le téléphone reste visible de vous seul."]],
   join: ["Rejoindre une famille", [
     "Un proche vous a invité. En rejoignant la famille, vous verrez ses membres et pourrez être ajouté à ses événements. Vous entrez comme simple membre."]],
+  "family-messages": ["Les messages de la famille", [
+    "Un fil de messages visible de tous les membres de la famille : nouvelles, annonces, remerciements, rappels d'une date.",
+    "Chacun peut supprimer ses propres messages ; un administrateur peut supprimer n'importe quel message."]],
+  album: ["L'album photos", [
+    "Les photos de l'événement, partagées par tous les participants : préparatifs, cérémonie, fête. Touchez une photo pour l'agrandir ou la télécharger.",
+    "Les photos sont réduites avant l'envoi pour rester légères (pas besoin de bon réseau). Chacun peut retirer les siennes ; l'organisateur peut retirer toutes les photos."]],
+  "event-messages": ["Messages et témoignages", [
+    "Le livre d'or de l'événement : vœux, souvenirs, remerciements. Les messages sont visibles de tous les participants.",
+    "Les invités peuvent aussi écrire depuis leur lien de réponse, sans compte : leur message attend la validation de l'organisateur avant d'apparaître ici."]],
   rsvp: ["Répondre à l'invitation", [
     "Dites aux organisateurs si vous serez présents, et combien de personnes viendront avec vous. Pas besoin de compte : ce lien vous est personnel.",
-    "Vous pouvez revenir sur ce lien pour modifier votre réponse."]],
+    "Vous pouvez revenir sur ce lien pour modifier votre réponse.",
+    "Plus bas, « Livre d'or » : laissez un message ou un témoignage, publié après validation de l'organisateur."]],
 };
 
 /** Quelle aide pour l'adresse affichée ? */
@@ -2957,7 +3320,7 @@ function helpKeyFor(path) {
   if (head === "familles") return "families";
   if (head === "famille") {
     const tab = p[2];
-    return tab === "membre" ? "member" : tab === "evenements" ? "family-events" : tab === "comites" ? "family-committees" : tab === "inviter" ? "family-invite" : "family-members";
+    return tab === "membre" ? "member" : tab === "evenements" ? "family-events" : tab === "comites" ? "family-committees" : tab === "inviter" ? "family-invite" : tab === "messages" ? "family-messages" : "family-members";
   }
   if (head === "nouvel-evenement") return "new-event";
   if (head === "evenement") {
@@ -2967,6 +3330,7 @@ function helpKeyFor(path) {
     if (t === "budget") return sub === "contributions" ? "budget-contributions" : sub === "depense" ? "expense" : ["contribuer", "contribution"].includes(sub) ? "contribution" : sub === "don-recu" ? "gift" : "budget-expenses";
     if (t === "invites") return sub === "carton" ? "card" : sub === "partager" ? "share" : "guests";
     if (t === "participants") return "participants";
+    if (t === "souvenirs") return sub === "messages" ? "event-messages" : sub === "photo" ? null : "album";
     if (t === "modifier") return "edit";
   }
   return { taches: "my-tasks", budget: "my-budget", plus: "settings", profil: "profile", rejoindre: "join", rsvp: "rsvp" }[head] ?? null;
@@ -3119,14 +3483,15 @@ const LEGAL = {
       h("li", {}, "Compte : adresse email, nom affiché, et le fait que l'email est vérifié (géré par Firebase Authentication ; les mots de passe ne sont jamais visibles)."),
       h("li", {}, "Profil : téléphone, facultatif, visible de vous seul."),
       h("li", {}, "Familles et événements : noms, rôles, dates, lieux, tâches, dépenses, contributions (montant, provenance, statut), comités."),
-      h("li", {}, "Invités : nom du foyer, nombre de places, téléphone facultatif, réponse et petit mot.")),
+      h("li", {}, "Invités : nom du foyer, nombre de places, téléphone facultatif, réponse et petit mot."),
+      h("li", {}, "Souvenirs : photos ajoutées à l'album (réduites, avec leur légende et le nom de l'auteur), messages du livre d'or, messages laissés par les invités et messages à la famille.")),
     h("h2", {}, "Pourquoi"), h("p", {}, "Uniquement pour faire fonctionner l'application : afficher à chaque membre ce que son rôle lui permet de voir, calculer l'avancement et les totaux, envoyer les liens d'invitation. Aucune publicité, aucune revente, aucun profilage. Base légale : l'exécution du service que vous demandez."),
     h("h2", {}, "Qui voit vos données"),
     h("ul", {},
-      h("li", {}, "Un événement n'est visible que de ses participants ; un simple membre ne voit que les totaux du budget ; une contribution anonyme n'est nominative que pour le contributeur et le trésorier ; la liste des invités est réservée aux organisateurs."),
+      h("li", {}, "Un événement n'est visible que de ses participants ; un simple membre ne voit que les totaux du budget ; une contribution anonyme n'est nominative que pour le contributeur et le trésorier ; la liste des invités est réservée aux organisateurs ; l'album et le livre d'or sont visibles des participants de l'événement (un message d'invité seulement après validation de l'organisateur) ; les messages de la famille sont visibles de ses membres."),
       h("li", {}, "Hébergement : Google Firebase (Google Ireland Ltd), base de données dans une région européenne. Site : GitHub Pages (GitHub Inc.)."),
       h("li", {}, "Services chargés par votre navigateur : photos d'illustration (Unsplash), carte du lieu (Google Maps, seulement si vous cliquez), polices (Google Fonts). Ils voient votre adresse IP, comme tout site web.")),
-    h("h2", {}, "Durée de conservation"), h("p", {}, "Tant que votre compte existe. À la suppression du compte, votre profil, vos appartenances et vos participations sont effacés ; votre nom est remplacé par « Compte supprimé » là où il doit rester pour la cohérence d'une famille ou d'un événement (par exemple une contribution confirmée dans les comptes du trésorier)."),
+    h("h2", {}, "Durée de conservation"), h("p", {}, "Tant que votre compte existe. À la suppression du compte, votre profil, vos appartenances, vos participations, vos photos et vos messages sont effacés ; votre nom est remplacé par « Compte supprimé » là où il doit rester pour la cohérence d'une famille ou d'un événement (par exemple une contribution confirmée dans les comptes du trésorier)."),
     h("h2", {}, "Stockage sur votre appareil"), h("p", {}, "Bennoo garde sur votre appareil votre session de connexion et quelques préférences (aides repliées, page de bienvenue vue, langue). Pas de cookie publicitaire ni de mesure d'audience."),
     h("h2", {}, "Vos droits"), h("p", {}, "Accès, rectification, suppression (directement dans l'application), opposition, portabilité : écrivez à ", TODO("adresse email de contact"), ". Vous pouvez aussi saisir la CDP (Commission de protection des données personnelles, Sénégal) ou la CNIL (France)."),
     h("h2", {}, "Sécurité"), h("p", {}, "Les accès sont contrôlés par des règles de sécurité appliquées par Firebase lui-même ; les liens d'invitation utilisent des jetons aléatoires impossibles à deviner ; les connexions sont chiffrées (HTTPS)."),
@@ -3203,6 +3568,7 @@ async function deleteAccount(plan, onStep) {
   for (const e of plan.events) {
     onStep(`Événement « ${e.title} »…`);
     const evRef = fam(e.familyId).collection("events").doc(e.id);
+    await souvenirs.deleteMineInEvent(e.familyId, e.id); // vos photos et messages du livre d'or
     for (const c of await orga.listMyContributions(e.familyId, e.id)) {
       if (c.status !== "confirmed") await orga.deleteMyContribution(e.familyId, e.id, c.id);
       else { // confirmée : elle reste dans les comptes du trésorier, sans lien vers votre compte
@@ -3216,6 +3582,7 @@ async function deleteAccount(plan, onStep) {
   }
   for (const f of plan.families) {
     onStep(`Famille « ${f.name} »…`);
+    await souvenirs.deleteMineInFamily(f.id); // vos messages à la famille
     const ref = fam(f.id).collection("members").doc(me);
     if (f.myRole !== "owner") await ref.delete();
     else await ref.update({ displayName: DELETED_NAME }); // seul membre : la famille reste vide
@@ -3241,6 +3608,7 @@ async function deleteAccountScreen() {
       h("ul", {},
         h("li", {}, "Votre profil et votre compte de connexion sont effacés."),
         h("li", {}, `Vous quittez ${plural(plan.families.length, "famille")} et ${plural(plan.events.length, "événement")}.`),
+        h("li", {}, "Vos photos et vos messages (livre d'or, messages à la famille) sont effacés."),
         h("li", {}, "Vos contributions non confirmées sont retirées ; les contributions déjà confirmées restent dans les comptes du trésorier, sans lien avec votre compte."),
         h("li", {}, `Là où votre nom doit rester (famille ou événement dont vous êtes le seul membre), il est remplacé par « ${DELETED_NAME} ».`)),
       h("p", { class: "alert alert-error" }, "C'est définitif : rien ne pourra être récupéré."),
