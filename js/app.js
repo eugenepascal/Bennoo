@@ -23,6 +23,14 @@ const firebaseConfig = {
 };
 // Google Analytics n'est pas chargé : aucune mesure d'audience sans consentement.
 
+/* ---------- Langue (js/i18n.js) : le code reste en français, la traduction se fait à l'affichage ---------- */
+const I18N = window.BennooI18n ?? {
+  lang: "fr", locale: "fr-FR", t: (s) => s, picker: () => null,
+  dateFormat: (o) => I18N.dateFormat(o),
+  time: (d, sep) => { const s = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); return sep ? s.replace(":", sep) : s; },
+};
+const T = I18N.t;
+
 let auth = null, db = null, FIREBASE_READY = false;
 try {
   if (firebaseConfig.apiKey && firebaseConfig.projectId && window.firebase) {
@@ -589,14 +597,14 @@ function parseAmount(input, currency) {
 
 /** Montant court pour les cartes de chiffres : « 4 200 000 F » (FCFA) ou « 12 € ». */
 function kpiAmount(minor, currency) {
-  if (currency === "XOF") return `${new Intl.NumberFormat("fr-FR").format(minor)} F`;
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
+  if (currency === "XOF") return `${new Intl.NumberFormat(I18N.locale).format(minor)} F`;
+  return new Intl.NumberFormat(I18N.locale, { style: "currency", currency, maximumFractionDigits: 0 }).format(minor / 100);
 }
 
 /** Entier en unités mineures -> « 6 000 000 F CFA » / « 12,50 € ». */
 function formatAmount(minor, currency) {
   const digits = currency === "EUR" ? 2 : 0;
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat(I18N.locale, {
     style: "currency", currency, minimumFractionDigits: digits, maximumFractionDigits: digits,
   }).format(minor / 10 ** digits);
 }
@@ -618,7 +626,7 @@ function countdownLabel(date, now = new Date()) {
 
 function formatDate(date) {
   if (!date) return "Date à fixer";
-  return new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
+  return I18N.dateFormat({ weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(date);
 }
 
 /** Jeton d'invitation : 32 octets aléatoires en base64url (43 caractères), impossible à deviner. */
@@ -642,7 +650,7 @@ function inviteUrl(origin, familyId, token) {
 
 /** Lien de partage WhatsApp (ouvre WhatsApp avec le message pré-rempli, sans API). */
 function whatsappShareUrl(message) {
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/?text=${encodeURIComponent(T(message))}`;
 }
 
 function inviteMessage(familyName, url) {
@@ -931,6 +939,7 @@ function launchScreen() {
       h("a", { href: "#/decouvrir/0", class: "btn btn-primary btn-block btn-gold-ring" }, "Commencer"),
       h("p", { class: "launch-login" }, "Déjà un compte ? ", h("a", { href: "#/connexion" }, "Se connecter")),
       FIREBASE_READY ? null : h("p", { class: "small" }, "Aperçu : la connexion sera activée dès que le projet Firebase sera relié."),
+      I18N.picker({ compact: true }),
     ),
   );
   photoBackground(node, "womenWax", 900, 1400, "linear-gradient(180deg, rgba(76,29,149,.82) 0%, rgba(46,16,101,.35) 45%, rgba(30,15,69,.92) 100%)");
@@ -999,6 +1008,7 @@ function signupScreen() {
     form,
     googleButton(form),
     h("p", { class: "or" }, "Déjà un compte ? ", h("a", { href: "#/connexion" }, "Se connecter")),
+    I18N.picker({ compact: true }),
   );
   return { node, title: "Créer un compte" };
 }
@@ -1033,6 +1043,7 @@ function loginScreen() {
     form,
     googleButton(form),
     h("p", { class: "or" }, "Pas encore de compte ? ", h("a", { href: "#/inscription" }, "S'inscrire")),
+    I18N.picker({ compact: true }),
   );
   return { node, title: "Connexion" };
 }
@@ -1634,8 +1645,8 @@ function subHeader(title, backHref) {
   return h("div", { class: "screen-head sub-head" }, backHref ? h("a", { href: backHref, class: "back", "aria-label": "Retour" }, "‹") : null, h("h2", {}, title));
 }
 /** « 15 février 2025 » (maquettes), sans le jour de la semaine. */
-const shortLongDate = (d) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(d);
-const shortDate = (d) => (d ? new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d) : null);
+const shortLongDate = (d) => I18N.dateFormat({ day: "numeric", month: "long", year: "numeric" }).format(d);
+const shortDate = (d) => (d ? I18N.dateFormat({ day: "2-digit", month: "2-digit", year: "numeric" }).format(d) : null);
 const dateInput = (d) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "");
 const fromDateInput = (s) => { if (!s) return null; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d, 10, 0, 0); };
 const amountInput = (minor, currency) => (minor ? String(currency === "EUR" ? minor / 100 : minor) : "");
@@ -1733,7 +1744,7 @@ async function eventOverview(ctx) {
     h("section", { class: "card" }, h("div", { class: "section-head" }, h("h2", {}, "Informations"),
       isOrganizer ? h("span", { class: "row-actions" }, archiveButton(ctx), h("a", { href: `${base}/modifier`, class: "btn btn-sm" }, "Modifier")) : null),
     h("dl", { class: "facts" },
-      h("dt", {}, "Date"), h("dd", {}, event.startsAt ? `${formatDate(event.startsAt)} à ${event.startsAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "À fixer"),
+      h("dt", {}, "Date"), h("dd", {}, event.startsAt ? `${formatDate(event.startsAt)} à ${I18N.time(event.startsAt)}` : "À fixer"),
       h("dt", {}, "Lieu"), h("dd", {}, [event.venue, event.city].filter(Boolean).join(", ") || "À préciser"),
       h("dt", {}, "Famille"), h("dd", {}, family.name),
       h("dt", {}, "Invités prévus"), h("dd", {}, event.expectedGuests ?? "—")),
@@ -1841,7 +1852,7 @@ function calendar(ctx, tasks) {
   const wrap = h("div", { class: "form" });
 
   const draw = () => {
-    const title = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(month);
+    const title = I18N.dateFormat({ month: "long", year: "numeric" }).format(month);
     const prev = h("button", { type: "button", class: "back", "aria-label": "Mois précédent" }, "‹");
     const nextB = h("button", { type: "button", class: "back", "aria-label": "Mois suivant" }, "›");
     prev.addEventListener("click", () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); selected = null; draw(); });
@@ -2275,7 +2286,7 @@ function invitationCard(inv, guest) {
   const date = inv.startsAt;
   const [withHosts, without] = INVITE_LEAD[inv.type] ?? INVITE_LEAD.CUSTOM;
   const place = [inv.venue, inv.city].filter(Boolean).join(", ");
-  const weekday = date ? new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(date) : null;
+  const weekday = date ? I18N.dateFormat({ weekday: "long" }).format(date) : null;
   const card = h("section", { class: `invitation theme-${theme}`, "aria-label": `Carton d'invitation : ${inv.title}` },
     theme === "photo" ? photoBackground(h("div", { class: "inv-photo", "aria-hidden": "true" }), inv.cover && PHOTOS[inv.cover] ? inv.cover : (COVERS[inv.type] ?? COVERS.CUSTOM)[0], 900, 560,
       "linear-gradient(180deg, rgba(30,15,69,0) 40%, rgba(30,15,69,.55))") : null,
@@ -2289,9 +2300,9 @@ function invitationCard(inv, guest) {
       date ? h("div", { class: "inv-date" },
         h("span", { class: "inv-side" }, weekday),
         h("span", { class: "inv-day" }, String(date.getDate())),
-        h("span", { class: "inv-side" }, new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(date)))
+        h("span", { class: "inv-side" }, I18N.dateFormat({ month: "long", year: "numeric" }).format(date)))
         : h("p", { class: "inv-month" }, "Date à confirmer"),
-      date ? h("p", { class: "inv-time" }, `à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")}`) : null,
+      date ? h("p", { class: "inv-time" }, `à ${I18N.time(date, " h ")}`) : null,
       place ? h("p", { class: "inv-place" }, h("span", { "aria-hidden": "true" }, "📍 "), place) : null,
       inv.message ? [ornamentDivider(), h("p", { class: "inv-message" }, `« ${inv.message} »`)] : null,
       guest ? h("p", { class: "inv-guest" }, h("span", {}, guest.household), h("span", {}, `${plural(guest.seats, "place")} réservée${guest.seats > 1 ? "s" : ""}`)) : null));
@@ -2439,7 +2450,8 @@ async function rsvpScreen(fid, eid, token) {
   const node = bare(
     h("div", { class: "auth-brand" }, h("img", { src: "images/logo.svg", alt: "" }), h("h1", {}, "Vous êtes invités")),
     invitationCard(inv, guest), status, form,
-    h("p", { class: "muted small" }, "Votre réponse est transmise aux seuls organisateurs. Pas besoin de compte."));
+    h("p", { class: "muted small" }, "Votre réponse est transmise aux seuls organisateurs. Pas besoin de compte."),
+    I18N.picker({ compact: true }));
   return { node, title: `Invitation · ${inv.title}` };
 }
 
@@ -2603,7 +2615,7 @@ async function homeScreen() {
   });
 
   // ─── En-tête : salutation, date du jour ───
-  const today = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  const today = I18N.dateFormat({ weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const hour = new Date().getHours();
   const hello = hour < 5 || hour >= 18 ? "Bonsoir" : "Bonjour";
   const head = h("div", { class: "hello home-hello" },
@@ -2832,7 +2844,7 @@ async function shareGuestPanel(ctx, token) {
   copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(url); toast("Lien copié"); } catch { prompt("Copiez ce lien :", url); } });
   const share = (href, ico, label) => h("a", { href, class: "share-btn", target: href.startsWith("http") ? "_blank" : null, rel: "noopener" }, h("span", { "aria-hidden": "true" }, ico), label);
   const more = navigator.share ? h("button", { type: "button", class: "share-btn" }, h("span", { "aria-hidden": "true" }, "⋯"), "Plus") : null;
-  more?.addEventListener("click", () => navigator.share({ title: event.title, text: msg, url }).catch(() => {}));
+  more?.addEventListener("click", () => navigator.share({ title: event.title, text: T(msg), url }).catch(() => {}));
   return h("div", { class: "form" },
     subHeader(`Partager l'invitation · ${g.household}`, `${base}/invites`),
     h("section", { class: "card form center" }, qrBox,
@@ -2840,8 +2852,8 @@ async function shareGuestPanel(ctx, token) {
     h("section", { class: "card" }, h("h3", {}, "Partager sur"),
       h("div", { class: "share-row" },
         share(g.phone ? `https://wa.me/${g.phone.replace("+", "")}?text=${encodeURIComponent(msg)}` : whatsappShareUrl(msg), "🟢", "WhatsApp"),
-        share(`mailto:?subject=${encodeURIComponent(`Invitation : ${event.title}`)}&body=${encodeURIComponent(msg)}`, "✉️", "E-mail"),
-        share(`sms:${g.phone ?? ""}?&body=${encodeURIComponent(msg)}`, "💬", "SMS"),
+        share(`mailto:?subject=${encodeURIComponent(T(`Invitation : ${event.title}`))}&body=${encodeURIComponent(T(msg))}`, "✉️", "E-mail"),
+        share(`sms:${g.phone ?? ""}?&body=${encodeURIComponent(T(msg))}`, "💬", "SMS"),
         more)),
     h("a", { href: `${base}/invites`, class: "btn btn-primary btn-block" }, `Voir les réponses (${answered})`));
 }
@@ -3115,7 +3127,7 @@ const LEGAL = {
       h("li", {}, "Hébergement : Google Firebase (Google Ireland Ltd), base de données dans une région européenne. Site : GitHub Pages (GitHub Inc.)."),
       h("li", {}, "Services chargés par votre navigateur : photos d'illustration (Unsplash), carte du lieu (Google Maps, seulement si vous cliquez), polices (Google Fonts). Ils voient votre adresse IP, comme tout site web.")),
     h("h2", {}, "Durée de conservation"), h("p", {}, "Tant que votre compte existe. À la suppression du compte, votre profil, vos appartenances et vos participations sont effacés ; votre nom est remplacé par « Compte supprimé » là où il doit rester pour la cohérence d'une famille ou d'un événement (par exemple une contribution confirmée dans les comptes du trésorier)."),
-    h("h2", {}, "Stockage sur votre appareil"), h("p", {}, "Bennoo garde sur votre appareil votre session de connexion et quelques préférences (aides repliées, page de bienvenue vue). Pas de cookie publicitaire ni de mesure d'audience."),
+    h("h2", {}, "Stockage sur votre appareil"), h("p", {}, "Bennoo garde sur votre appareil votre session de connexion et quelques préférences (aides repliées, page de bienvenue vue, langue). Pas de cookie publicitaire ni de mesure d'audience."),
     h("h2", {}, "Vos droits"), h("p", {}, "Accès, rectification, suppression (directement dans l'application), opposition, portabilité : écrivez à ", TODO("adresse email de contact"), ". Vous pouvez aussi saisir la CDP (Commission de protection des données personnelles, Sénégal) ou la CNIL (France)."),
     h("h2", {}, "Sécurité"), h("p", {}, "Les accès sont contrôlés par des règles de sécurité appliquées par Firebase lui-même ; les liens d'invitation utilisent des jetons aléatoires impossibles à deviner ; les connexions sont chiffrées (HTTPS)."),
   ]],
@@ -3282,7 +3294,7 @@ function liveCountdown(event) {
     const hh = Math.floor(ms / 3600000); ms -= hh * 3600000;
     const mm = Math.floor(ms / 60000); ms -= mm * 60000;
     parts.d.textContent = d; parts.h.textContent = String(hh).padStart(2, "0"); parts.m.textContent = String(mm).padStart(2, "0"); parts.s.textContent = String(Math.floor(ms / 1000)).padStart(2, "0");
-    caption.textContent = `${formatDate(event.startsAt)} à ${event.startsAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}${event.city ? ` · ${event.city}` : ""}`;
+    caption.textContent = `${formatDate(event.startsAt)} à ${I18N.time(event.startsAt)}${event.city ? ` · ${event.city}` : ""}`;
   };
   const timer = setInterval(tick, 1000);
   tick();
@@ -3334,16 +3346,16 @@ async function makeSaveTheDate(event, hosts) {
   x.fillStyle = "#f0c35a"; x.font = "italic 92px Georgia, serif";
   wrapText(x, hosts || event.title, W / 2, 400, W - 220, 104);
   x.fillStyle = "#ffffff"; x.font = "500 40px Poppins, sans-serif";
-  x.fillText(EVENT_TYPES[event.type], W / 2, 640);
+  x.fillText(T(EVENT_TYPES[event.type]), W / 2, 640);
   if (event.startsAt) {
     x.fillStyle = "#f0c35a"; x.font = "800 220px Poppins, sans-serif"; x.fillText(String(event.startsAt.getDate()), W / 2, 900);
     x.fillStyle = "#ffffff"; x.font = "700 64px Poppins, sans-serif";
-    x.fillText(new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(event.startsAt).toUpperCase(), W / 2, 1000);
+    x.fillText(I18N.dateFormat({ month: "long", year: "numeric" }).format(event.startsAt).toUpperCase(), W / 2, 1000);
   } else {
-    x.fillStyle = "#ffffff"; x.font = "700 64px Poppins, sans-serif"; x.fillText("Date à venir", W / 2, 940);
+    x.fillStyle = "#ffffff"; x.font = "700 64px Poppins, sans-serif"; x.fillText(T("Date à venir"), W / 2, 940);
   }
   if (event.city) { x.fillStyle = "#ede9fe"; x.font = "500 46px Poppins, sans-serif"; x.fillText(event.city, W / 2, 1090); }
-  x.fillStyle = "rgba(255,255,255,.75)"; x.font = "500 30px Poppins, sans-serif"; x.fillText("Invitation à suivre · organisé avec Bennoo", W / 2, 1220);
+  x.fillStyle = "rgba(255,255,255,.75)"; x.font = "500 30px Poppins, sans-serif"; x.fillText(T("Invitation à suivre · organisé avec Bennoo"), W / 2, 1220);
   return new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.9));
 }
 function wrapText(x, text, cx, y, maxW, lh) {
@@ -3364,7 +3376,7 @@ function saveTheDateCard(ctx, invitation) {
     const share = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Partager");
     share.addEventListener("click", async () => {
       try {
-        if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: event.title, text: `Save the date : ${event.title}` });
+        if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: event.title, text: T(`Save the date : ${event.title}`) });
         else toast("Partage direct non disponible : téléchargez l'image puis envoyez-la.");
       } catch { /* partage annulé */ }
     });
@@ -3480,7 +3492,10 @@ async function settingsScreen() {
       row("#/installer", "📲", "Installer l'application", isInstalled() ? "Déjà installée sur cet appareil" : "Icône Bennoo sur l'écran d'accueil"),
       row("#/conditions/confidentialite", "🔒", "Confidentialité", "Ce que voient les autres, vos droits"),
       row("#/conditions/cgu", "📄", "Conditions d'utilisation et mentions légales", null),
-      h("li", {}, h("div", { class: "item" }, h("span", { class: "ico", "aria-hidden": "true" }, "🌐"), h("span", { class: "grow" }, h("span", { class: "title" }, "Langue"), h("span", { class: "sub" }, "Français (wolof prévu plus tard)")))),
+      h("li", {}, h("div", { class: "item lang-row" }, h("span", { class: "ico", "aria-hidden": "true" }, "🌐"),
+        h("span", { class: "grow" }, h("span", { class: "title" }, "Langue"), h("span", { class: "sub" }, "Choisissez la langue de Bennoo sur cet appareil."),
+          I18N.picker(),
+          I18N.lang === "wo" ? h("span", { class: "sub" }, "Le wolof est en bêta : une partie des textes reste en français, et les traductions doivent encore être relues.") : null))),
       h("li", {}, out),
       h("li", {}, h("a", { href: "#/supprimer-compte", class: "item danger" }, h("span", { class: "ico", "aria-hidden": "true" }, "🗑"),
         h("span", { class: "grow" }, h("span", { class: "title danger" }, "Supprimer mon compte"), h("span", { class: "sub" }, "Définitif")), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
@@ -3589,7 +3604,7 @@ function show({ node, title, nav = null }) {
   const path = location.hash.replace(/^#/, "") || "/";
   if (!["Introuvable", "Erreur"].includes(title) && (nav || /^\/(rsvp|rejoindre)\//.test(path))) insertHelp(node, path);
   root.replaceChildren(node, nav ? tabbar(nav) : "");
-  document.title = title ? `${title} · Bennoo` : "Bennoo";
+  document.title = title ? `${T(title)} · Bennoo` : "Bennoo";
   const heading = root.querySelector("h1");
   if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
   window.scrollTo(0, 0);

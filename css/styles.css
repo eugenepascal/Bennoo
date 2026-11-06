@@ -657,3 +657,15 @@ details.archived[open] summary { margin-bottom: 8px; }
 .avatar-link { border-radius: 16px; }
 .profile-card { text-decoration: none; color: inherit; }
 [hidden] { display: none !important; }
+
+/* ---------- Choix de la langue (js/i18n.js) ---------- */
+.lang-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.lang-picker.compact { justify-content: center; margin: 14px auto 0; }
+.lang-chip { font: inherit; font-size: .9rem; font-weight: 600; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; color: var(--violet-800); cursor: pointer; min-height: 36px; }
+.lang-chip:hover { border-color: var(--violet-400); }
+.lang-chip.active { background: var(--violet-700); border-color: var(--violet-700); color: #fff; }
+.lang-chip:focus-visible { outline: 3px solid var(--gold-400); outline-offset: 2px; }
+.launch .lang-chip { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; }
+.launch .lang-chip.active { background: #fff; color: var(--violet-800); border-color: #fff; }
+.settings .lang-row { align-items: flex-start; }
+.settings .lang-row .sub + .lang-picker + .sub { margin-top: 8px; }
