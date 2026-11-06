@@ -2555,6 +2555,7 @@ async function recentActivity(stats) {
 async function homeScreen() {
   const [profile, families, events] = await Promise.all([data.getProfile(), data.listMyFamilies(), data.listMyEvents()]);
   const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
+  const me = auth.currentUser.uid;
   const famName = Object.fromEntries(families.map((f) => [f.id, f.name]));
   const archivedList = events.filter((e) => e.status === "archived");
   const live = events.filter((e) => e.status !== "archived");
@@ -2564,38 +2565,110 @@ async function homeScreen() {
   const stats = await Promise.all(events.map(eventStats));
   const byId = Object.fromEntries(stats.map((x) => [x.e.id, x]));
   const next = upcoming[0] ? byId[upcoming[0].id] : null; // le prochain événement non archivé
-
+  const others = upcoming.slice(1);
   const cards = (list) => list.map((e) => eventCard(e, showFamily ? famName[e.familyId] : null, byId[e.id]?.progress ?? 0));
-  const listBox = h("div", {}, upcoming.length ? cards(upcoming)
-    : h("div", { class: "card empty" }, h("strong", {}, "Aucun événement à venir."), h("span", {}, families.length ? "Créez-en un : vous en serez l'organisateur." : "Commencez par créer votre famille.")));
-  const pastBox = past.length || archivedList.length ? h("div", { class: "form" },
-    past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null,
-    archivedList.length ? h("details", { class: "archived" }, h("summary", {}, `Événements archivés (${archivedList.length})`), h("div", {}, cards(archivedList))) : null) : null;
+
+  // Mes prochaines tâches, tous événements confondus (celles qui me sont confiées).
+  const myTasks = stats.filter((x) => x.e.status !== "archived").flatMap(({ e, tasks }) => tasks
+    .filter((t) => t.status !== "done" && t.assigneeUid === me)
+    .map((t) => ({ t, ctx: { fid: e.familyId, eid: e.id, base: `#/evenement/${enc(e.familyId)}/${enc(e.id)}`, isOrganizer: e.myRole === "organizer", myUid: me }, title: e.title })))
+    .sort((a, b) => (a.t.dueAt?.getTime() ?? Infinity) - (b.t.dueAt?.getTime() ?? Infinity));
 
   const search = events.length ? h("input", { type: "search", class: "input search desk-only", placeholder: "Rechercher…", "aria-label": "Rechercher un événement" }) : null;
   search?.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
-    for (const c of document.querySelectorAll(".event-card")) c.hidden = q !== "" && !c.dataset.search.includes(q);
+    for (const c of document.querySelectorAll(".event-card, .next-event")) c.hidden = q !== "" && !c.dataset.search.includes(q);
   });
 
-  let spotlight = null;
+  // ─── En-tête : salutation, date du jour ───
+  const today = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  const hour = new Date().getHours();
+  const hello = hour < 5 || hour >= 18 ? "Bonsoir" : "Bonjour";
+  const head = h("div", { class: "hello home-hello" },
+    avatar(name, "sq"),
+    h("div", { class: "grow" }, h("p", { class: "muted small today" }, today), h("h1", {}, `${hello} ${firstName(name)} 👋`)),
+    search);
+
+  // ─── Nouveau venu : bienvenue illustrée et création de la famille ───
+  if (families.length === 0) {
+    const node = screen(head,
+      photoBackground(h("section", { class: "home-hero" },
+        h("h2", {}, "Organisons ensemble vos moments précieux"),
+        h("p", {}, "Mariage, baptême, anniversaire, cérémonie… Toute la famille au même endroit.")), "reunion", 1000, 520,
+        "linear-gradient(180deg, rgba(46,16,101,.15), rgba(30,15,69,.88))"),
+      h("section", { class: "card form" },
+        h("h2", {}, "1. Créez votre famille"),
+        h("p", { class: "muted small" }, "C'est l'espace commun de vos proches. Vous avez reçu un lien d'invitation ? Ouvrez-le simplement pour rejoindre la famille."),
+        createFamilyForm(name)),
+      h("ol", { class: "welcome-steps" },
+        h("li", { class: "welcome-step" }, h("span", { class: "n" }, "2"), h("div", {}, h("h3", {}, "Invitez vos proches"), h("p", { class: "muted" }, "Un lien à envoyer sur WhatsApp."))),
+        h("li", { class: "welcome-step" }, h("span", { class: "n" }, "3"), h("div", {}, h("h3", {}, "Créez votre premier événement"), h("p", { class: "muted" }, "Avec sa checklist adaptée à la cérémonie.")))));
+    return { node, title: "Accueil", nav: "home" };
+  }
+
+  // ─── Le prochain événement, en grand ───
+  let hero = null;
   if (next) {
     const { e, summary, left, progress } = next;
     const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
-    // Version ordinateur (maquette 14) : chiffres clés et prochaines tâches de l'événement à venir.
-    const kpi = (v, l) => h("div", { class: "kpi" }, h("span", { class: "v sm" }, v), h("span", { class: "l" }, l));
-    const nextTasks = next.tasks.filter((t) => t.status !== "done").slice(0, 3);
-    spotlight = h("div", { class: "form desk-only" },
-      h("div", { class: "kpi-row four" },
-        kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
-        kpi(String(left), "Tâches restantes"),
-        kpi(e.budgetPlanned ? kpiAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
-        kpi(summary.budget ? String(summary.budget.contributors) : "—", "Contributions")),
-      nextTasks.length ? h("section", {}, h("h2", {}, "Prochaines tâches"),
-        h("ul", { class: "list task-cards" }, nextTasks.map((t) => taskItem({ fid: e.familyId, eid: e.id, base, isOrganizer: e.myRole === "organizer", myUid: auth.currentUser.uid }, t)))) : null);
+    const bar = h("span", { class: "bar" }, h("span", {})); bar.firstChild.style.width = `${progress ?? 0}%`;
+    const financed = summary.budget && e.budgetPlanned ? pct(summary.budget.confirmed, e.budgetPlanned) : null;
+    const stat = (v, l) => h("span", { class: "ne-stat" }, h("strong", {}, v), h("span", {}, l));
+    hero = h("a", { href: base, class: "next-event", dataset: { search: [e.title, e.city, EVENT_TYPES[e.type]].filter(Boolean).join(" ").toLowerCase() } },
+      photoBackground(h("span", { class: "ne-photo" },
+        h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)),
+        h("span", { class: "ne-type" }, EVENT_ICONS[e.type], " ", EVENT_TYPES[e.type])), coverOf(e), 1000, 560,
+        "linear-gradient(180deg, rgba(30,15,69,.05), rgba(30,15,69,.55))"),
+      h("span", { class: "ne-body" },
+        h("span", { class: "ne-kicker" }, "Votre prochain événement"),
+        h("strong", { class: "ne-title" }, e.title),
+        h("span", { class: "muted small" }, [e.startsAt ? formatDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" · ")),
+        h("span", { class: "ne-progress" }, bar, h("span", {}, `${progress ?? 0} % organisé`)),
+        h("span", { class: "ne-stats" },
+          stat(String(left), `tâche${left > 1 ? "s" : ""} restante${left > 1 ? "s" : ""}`),
+          stat(summary.guests ? String(summary.guests.attending) : "—", "invités confirmés"),
+          stat(financed === null ? "—" : `${financed} %`, "du budget financé"))));
   }
 
-  // Activité récente : chargée après l'affichage, et seulement sur grand écran (là où elle est visible).
+  // ─── Raccourcis ───
+  const firstFamily = families[0];
+  const tile = (href, ico, label, sub) => h("a", { href, class: "quick" }, h("span", { class: "q-ico", "aria-hidden": "true" }, ico), h("strong", {}, label), sub ? h("span", {}, sub) : null);
+  const quick = h("nav", { class: "quick-grid", "aria-label": "Raccourcis" },
+    tile("#/nouvel-evenement", "✨", "Nouvel événement", "avec checklist"),
+    ["owner", "admin"].includes(firstFamily.myRole)
+      ? tile(`#/famille/${enc(firstFamily.id)}/inviter`, "💌", "Inviter un proche", "lien WhatsApp")
+      : tile(`#/famille/${enc(firstFamily.id)}`, "👨‍👩‍👧", "Ma famille", firstFamily.name),
+    tile("#/taches", "✅", "Mes tâches", myTasks.length ? `${myTasks.length} à faire` : "à jour"),
+    tile("#/budget", "💰", "Budget", plural(live.length, "événement")));
+
+  // ─── Mes prochaines tâches ───
+  const tasksBox = myTasks.length ? h("section", {},
+    h("div", { class: "section-head" }, h("h2", {}, "Mes prochaines tâches"), h("a", { href: "#/taches", class: "small" }, "Tout voir")),
+    h("ul", { class: "list task-cards" }, myTasks.slice(0, 3).map(({ t, ctx }) => taskItem(ctx, t)))) : null;
+
+  // ─── Version ordinateur : chiffres clés du prochain événement (maquette 14) ───
+  let spotlight = null;
+  if (next) {
+    const { e, summary, left } = next;
+    const kpi = (v, l) => h("div", { class: "kpi" }, h("span", { class: "v sm" }, v), h("span", { class: "l" }, l));
+    spotlight = h("div", { class: "kpi-row four desk-only" },
+      kpi(summary.guests ? String(summary.guests.attending) : "—", "Invités confirmés"),
+      kpi(String(left), "Tâches restantes"),
+      kpi(e.budgetPlanned ? kpiAmount(e.budgetPlanned, e.currency) : "—", "Budget global"),
+      kpi(summary.budget ? String(summary.budget.contributors) : "—", "Contributions"));
+  }
+
+  const listBox = upcoming.length === 0
+    ? photoEmpty("celebration", "Aucun événement à venir.", "Créez-en un : vous en serez l'organisateur, avec une checklist adaptée à la cérémonie.",
+      h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-block" }, "+ Créer un événement"))
+    : others.length ? h("section", {},
+      h("div", { class: "section-head" }, h("h2", {}, "Mes autres événements"), h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer")),
+      h("div", {}, cards(others))) : null;
+  const pastBox = past.length || archivedList.length ? h("div", { class: "form" },
+    past.length ? h("section", {}, h("h2", {}, "Événements récents"), h("div", {}, cards(past))) : null,
+    archivedList.length ? h("details", { class: "archived" }, h("summary", {}, `Événements archivés (${archivedList.length})`), h("div", {}, cards(archivedList))) : null) : null;
+
+  // ─── Activité récente : chargée après l'affichage, sur grand écran ───
   const activityBox = h("div", {}, loading("Chargement de l'activité…"));
   const aside = h("aside", { class: "card activity desk-only", "aria-labelledby": "act-title" }, h("h2", { id: "act-title" }, "Activité récente"), activityBox);
   if (events.length && window.matchMedia("(min-width: 900px)").matches) {
@@ -2607,28 +2680,10 @@ async function homeScreen() {
       .catch(() => activityBox.replaceChildren(h("p", { class: "muted small" }, "Activité momentanément indisponible.")));
   }
 
-  const node = screen(
-    h("div", { class: "hello" },
-      avatar(name, "sq"),
-      h("div", { class: "grow" }, h("h1", {}, `Bonjour ${firstName(name)} 👋`), h("p", { class: "muted" }, "Ravi de vous revoir !")),
-      search),
-    families.length === 0
-      ? h("section", { class: "card" },
-        h("h2", {}, "Créez votre famille"),
-        h("p", { class: "muted small" }, "C'est l'espace où vous organiserez vos événements avec vos proches. Vous avez reçu un lien d'invitation ? Ouvrez-le pour rejoindre la famille."),
-        h("div", { class: "form" }, createFamilyForm(name)))
-      : null,
+  const node = screen(head,
     h("div", { class: "home-grid" },
-      h("div", { class: "home-main" },
-        h("section", {},
-          h("div", { class: "section-head" }, h("h2", {}, "Mes événements"),
-            families.length ? h("a", { href: "#/nouvel-evenement", class: "btn btn-primary btn-sm" }, "+ Créer") : null),
-          listBox),
-        spotlight,
-        families.length ? inspirations() : null,
-        pastBox),
-      events.length ? aside : null),
-  );
+      h("div", { class: "home-main" }, hero, spotlight, quick, tasksBox, listBox, inspirations(), pastBox),
+      events.length ? aside : null));
   return { node, title: "Accueil", nav: "home" };
 }
 
@@ -2786,8 +2841,8 @@ async function shareGuestPanel(ctx, token) {
    le choix est mémorisé sur l'appareil. Les textes sont rassemblés ici pour être relus facilement. */
 const HELP = {
   home: ["Votre accueil", [
-    "Retrouvez ici tous les événements auxquels vous participez, avec leur date et l'avancement de leur organisation (pourcentage de tâches terminées). Touchez un événement pour l'ouvrir.",
-    "« + Créer » lance un nouvel événement : vous en deviendrez l'organisateur. Sur ordinateur, la colonne « Activité récente » résume les dernières nouvelles : tâches terminées, réponses des invités, contributions."]],
+    "En haut, votre prochain événement : sa photo, le temps restant, l'avancement de l'organisation, les tâches restantes, les invités confirmés et la part du budget financée. Touchez-le pour l'ouvrir.",
+    "Dessous : des raccourcis (nouvel événement, inviter un proche, mes tâches, budget), les tâches qui vous sont confiées, vos autres événements et des idées « Préparer… ». Sur ordinateur, la colonne « Activité récente » résume les dernières nouvelles."]],
   families: ["Vos familles", [
     "Une famille est l'espace commun où vos proches se retrouvent. Chaque événement appartient à une famille, et seuls ses membres peuvent y être ajoutés.",
     "Vous pouvez appartenir à plusieurs familles (par exemple côté père et côté mère) et en créer une nouvelle ici."]],

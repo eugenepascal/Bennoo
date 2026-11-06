@@ -616,3 +616,30 @@ details.archived[open] summary { margin-bottom: 8px; }
 .theme-photo .inv-time, .theme-ivoire .inv-time { color: #a67c1f; }
 .theme-wax .inv-time { color: #b45309; }
 .inv-guest { border-top: 0 !important; }
+
+/* ═══ Accueil réorganisé (06/11/2026) ═══════════════════════════════════════ */
+.home-hello .today { text-transform: capitalize; margin-bottom: 2px; }
+.home-hello h1 { font-size: 1.45rem; }
+.home-hero { border-radius: 22px; min-height: 220px; color: #fff; padding: 22px 18px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.home-hero h2 { color: #fff; font-size: 1.35rem; }
+.home-hero p { color: #ede9fe; }
+.next-event { display: block; border-radius: 22px; overflow: hidden; background: #fff; border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(46,16,101,.12); text-decoration: none; color: inherit; }
+.next-event[hidden] { display: none; }
+.ne-photo { display: flex; justify-content: space-between; align-items: flex-start; height: 170px; padding: 12px; }
+.ne-type { background: rgba(255,255,255,.9); color: var(--violet-900); border-radius: 999px; padding: 3px 10px; font-size: .8rem; font-weight: 700; }
+.ne-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; }
+.ne-kicker { font-size: .72rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold-600); }
+.ne-title { font-size: 1.25rem; color: var(--violet-950); line-height: 1.2; }
+.ne-progress { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: .82rem; font-weight: 700; color: var(--violet-800); white-space: nowrap; }
+.ne-progress .bar { flex: 1; height: 10px; margin: 0; }
+.ne-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+.ne-stat { background: #faf8ff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.ne-stat strong { font-size: 1.15rem; color: var(--violet-950); }
+.ne-stat span { font-size: .72rem; color: var(--muted); line-height: 1.2; }
+.quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 600px) { .quick-grid { grid-template-columns: repeat(4, 1fr); } }
+.quick { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 16px; background: #fff; border: 1px solid var(--line); text-decoration: none; color: inherit; box-shadow: var(--shadow); }
+.quick:hover { border-color: var(--violet-200); }
+.quick .q-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 1.25rem; background: linear-gradient(150deg, var(--violet-100), var(--gold-200)); margin-bottom: 6px; }
+.quick strong { color: var(--violet-950); font-size: .95rem; }
+.quick span:last-child { font-size: .78rem; color: var(--muted); }
