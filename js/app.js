@@ -1690,9 +1690,9 @@ async function eventOverview(ctx) {
 
   return h("div", { class: "form" },
     liveCountdown(event),
-    h("div", { class: "kpis" },
-      h("div", { class: "kpi big" }, h("span", { class: "v" }, n === null ? "—" : n > 0 ? `J-${n}` : n === 0 ? "Jour J" : "Passé"),
-        h("span", { class: "l" }, n === null ? "Date à fixer" : n > 0 ? "avant le grand jour" : n === 0 ? "c'est aujourd'hui !" : "événement passé")),
+    h("div", { class: `kpis${event.startsAt ? " one" : ""}` },
+      // Avec une date, le compte à rebours au-dessus remplace la carte « J-n ».
+      event.startsAt ? null : h("div", { class: "kpi big" }, h("span", { class: "v" }, "—"), h("span", { class: "l" }, "Date à fixer")),
       h("div", { class: "kpi kpi-ring" }, ring(progress, "de l'organisation"),
         h("span", {}, h("strong", { class: "v" }, `${progress}%`), h("span", { class: "l" }, tasks.length ? "Organisation" : "Aucune tâche")))),
     h("div", { class: "kpi-row four" },

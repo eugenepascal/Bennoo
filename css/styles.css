@@ -517,9 +517,9 @@ details.archived[open] summary { margin-bottom: 8px; }
 .tl-time { font-weight: 800; color: var(--violet-800); min-width: 4.5rem; }
 .tl-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .prog-form { display: grid; grid-template-columns: 6.5rem 1fr; gap: 8px; }
-.prog-form [name=place] { grid-column: 1 / 2; }
-.prog-form [name=place], .prog-form button { grid-column: auto; }
-@media (min-width: 600px) { .prog-form { grid-template-columns: 7rem 1fr 1fr auto; } }
+.prog-form [name=place], .prog-form button { grid-column: 1 / -1; }
+@media (min-width: 600px) { .prog-form { grid-template-columns: 7rem 1fr 1fr auto; } .prog-form [name=place], .prog-form button { grid-column: auto; } }
+.kpis.one { grid-template-columns: 1fr; }
 .roadmap { display: flex; flex-direction: column; gap: 12px; }
 .phase { border: 1px solid var(--line); border-radius: 16px; padding: 12px; background: #fff; }
 .phase.complete { border-color: #b7e4c7; background: #f4fbf6; }
