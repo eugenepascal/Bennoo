@@ -656,3 +656,4 @@ details.archived[open] summary { margin-bottom: 8px; }
 .photo-edit label.btn { cursor: pointer; }
 .avatar-link { border-radius: 16px; }
 .profile-card { text-decoration: none; color: inherit; }
+[hidden] { display: none !important; }
