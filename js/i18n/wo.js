@@ -405,6 +405,12 @@ BennooI18n.add("wo", {
  "Le wolof est en bêta : une partie des textes reste en français, et les traductions doivent encore être relues.": "Wolof bi ci bêta la: am na ay mbind yu des ci français, te fàww ñu jàngaat tekki yi.",
  "avec checklist": "ak lim liggéey"
 }, [
+  ["^‹ (.+)$", (m, t) => { const r = t(m[1]); return r === m[1] ? undefined : `‹ ${r}`; }],
+  ["^(.+) ›$", (m, t) => { const r = t(m[1]); return r === m[1] ? undefined : `${r} ›`; }],
+  ["^(‹ .+|.+ ›) : (.+)$", (m, t) => `${t(m[1])}: ${m[2]}`],
+  ["^(\\p{Extended_Pictographic}[\\u200d\\p{Extended_Pictographic}\\ufe0f]*) (.+)$", (m, t) => { const r = t(m[2]); return r === m[2] ? undefined : `${m[1]} ${r}`; }],
+  ["^Tâche terminée : (.+)$", (m) => `Liggéey bi jeex na: ${m[1]}`],
+  ["^Contribution (promise|déclarée|confirmée) : (.+)$", (m) => `Ndimbal ${{ promise: "dige", déclarée: "biral", confirmée: "dëggal" }[m[1]]}: ${m[2]}`],
   ["^Écran (\\d+) sur (\\d+)$", (m) => `Xët ${m[1]} ci ${m[2]}`],
   ["^Étape (\\d+) sur (\\d+)$", (m) => `Tappax ${m[1]} ci ${m[2]}`],
   ["^(\\d+) membres? • (\\d+) événements?$", (m) => `${m[1]} cër • ${m[2]} xew`],

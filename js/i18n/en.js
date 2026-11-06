@@ -861,6 +861,13 @@ BennooI18n.add("en", {
  "Ex. Fatou & Mamadou": "E.g. Fatou & Mamadou",
  "avec checklist": "with checklist"
 }, [
+  ["^Contribution (promise|déclarée|confirmée) : (.+)$", (m) => `Contribution ${{ promise: "pledged", déclarée: "declared", confirmée: "confirmed" }[m[1]]}: ${m[2]}`],
+  ["^(.+) vient \\((\\d+)\\)$", (m) => `${m[1]} is coming (${m[2]})`],
+  ["^(.+) ne viendra pas$", (m) => `${m[1]} is not coming`],
+  ["^‹ (.+)$", (m, t) => { const r = t(m[1]); return r === m[1] ? undefined : `‹ ${r}`; }],
+  ["^(.+) ›$", (m, t) => { const r = t(m[1]); return r === m[1] ? undefined : `${r} ›`; }],
+  ["^(‹ .+|.+ ›) : (.+)$", (m, t) => `${t(m[1])}: ${m[2]}`],
+  ["^(\\p{Extended_Pictographic}[\\u200d\\p{Extended_Pictographic}\\ufe0f]*) (.+)$", (m, t) => { const r = t(m[2]); return r === m[2] ? undefined : `${m[1]} ${r}`; }],
   ["^Connexion en cours… (\\d+) s$", (m) => `Signing in… ${m[1]} s`],
   ["^Bonjour ! Rejoins « (.+) » sur Bennoo pour organiser nos événements en famille : (\\S+) \\(lien valable (\\d+) jours\\)$", (m) => `Hello! Join "${m[1]}" on Bennoo to organise our family events: ${m[2]} (link valid for ${m[3]} days)`],
   ["^Écran (\\d+) sur (\\d+)$", (m) => `Screen ${m[1]} of ${m[2]}`],
