@@ -539,3 +539,72 @@ details.archived[open] summary { margin-bottom: 8px; }
 .photo-empty > .form, .photo-empty > p, .photo-empty > button { margin: 0 16px; }
 .photo-empty > :last-child { margin-bottom: 16px; }
 .photo-empty .pe-photo { height: 140px; background: linear-gradient(135deg, var(--violet-200), var(--gold-200)); margin-bottom: 4px; }
+
+/* ═══ Cartons d'invitation : 4 modèles (06/11/2026) ═══════════════════════ */
+.invitation { position: relative; overflow: hidden; border-radius: 22px; padding: 0; text-align: center; box-shadow: 0 14px 40px rgba(46,16,101,.22); max-width: 460px; margin: 0 auto; width: 100%; }
+.invitation .inv-inner { position: relative; z-index: 1; padding: 42px 28px 34px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.inv-kicker { font: 600 .72rem/1 Poppins, sans-serif; letter-spacing: 3px; text-transform: uppercase; opacity: .85; }
+.inv-hosts { font-family: "Great Vibes", "Snell Roundhand", cursive; font-size: 3rem; line-height: 1.1; font-style: normal; margin: 4px 0; }
+.inv-lead { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 1.15rem; }
+.inv-title { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 700; font-size: 1.35rem; letter-spacing: .3px; }
+.inv-divider { display: flex; align-items: center; gap: 10px; width: 70%; margin: 8px 0; }
+.inv-divider span { flex: 1; height: 1px; background: currentColor; opacity: .45; }
+.inv-divider i { font-style: normal; font-size: .9rem; }
+.inv-date { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; width: 100%; max-width: 330px; }
+.inv-date .inv-side { font: 600 .78rem/1.3 Poppins, sans-serif; letter-spacing: 2px; text-transform: uppercase; padding: 8px 0; border-top: 1px solid; border-bottom: 1px solid; border-color: inherit; }
+.inv-date .inv-day { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 700; font-size: 4.4rem; line-height: .9; }
+.inv-month { font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.inv-time { font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.2rem; font-style: italic; }
+.inv-place { font-size: .95rem; }
+.inv-message { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 1.15rem; max-width: 30ch; }
+.inv-guest { margin-top: 14px; padding: 10px 18px; border-radius: 999px; display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
+.inv-guest span:first-child { font-weight: 700; font-size: .98rem; }
+
+/* Royal : violet nuit, or, double filet */
+.theme-royal { color: #fbe7b5; background: radial-gradient(90% 60% at 50% 0%, rgba(240,195,90,.25), transparent 70%), linear-gradient(165deg, #5b21b6, #2e1065 60%, #1e0f45);
+  border: 2px solid rgba(240,195,90,.6); box-shadow: inset 0 0 0 8px #2e1065, inset 0 0 0 9px rgba(240,195,90,.55), 0 14px 40px rgba(46,16,101,.3); }
+.theme-royal .inv-hosts, .theme-royal .inv-day { color: #f0c35a; }
+.theme-royal .inv-title, .theme-royal .inv-time { color: #fff; }
+.theme-royal .inv-guest { background: rgba(255,255,255,.1); border: 1px solid rgba(240,195,90,.45); color: #fff; }
+
+/* Photo : photo de couverture en haut, carte blanche */
+.theme-photo { background: #fff; color: var(--violet-950); border: 1px solid var(--line); }
+.theme-photo .inv-photo { height: 210px; }
+.theme-photo .inv-inner { padding-top: 26px; margin-top: -34px; background: #fff; border-radius: 26px 26px 0 0; }
+.theme-photo .inv-hosts { color: var(--violet-700); }
+.theme-photo .inv-day { color: var(--violet-800); }
+.theme-photo .inv-kicker, .theme-photo .inv-divider { color: var(--gold-600); }
+.theme-photo .inv-date .inv-side { border-color: var(--gold-400); color: var(--violet-900); }
+.theme-photo .inv-guest { background: var(--violet-50, #f6f3ff); border: 1px solid var(--violet-200); }
+
+/* Wax : bordure à motifs géométriques, terre et or */
+.theme-wax { color: #3b1d0c; background: #fff6e8; border: 14px solid transparent;
+  border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='42' height='42' viewBox='0 0 42 42'%3E%3Crect width='42' height='42' fill='%23b45309'/%3E%3Cpath d='M0 21 21 0 42 21 21 42z' fill='%23f0c35a'/%3E%3Cpath d='M10.5 21 21 10.5 31.5 21 21 31.5z' fill='%235b21b6'/%3E%3Ccircle cx='21' cy='21' r='3.5' fill='%23fff6e8'/%3E%3C/svg%3E") 14 round; }
+.theme-wax::before { content: ""; position: absolute; inset: 0; opacity: .07; background: repeating-linear-gradient(45deg, #b45309 0 6px, transparent 6px 18px), repeating-linear-gradient(-45deg, #5b21b6 0 6px, transparent 6px 18px); }
+.theme-wax .inv-hosts { color: #b45309; }
+.theme-wax .inv-day { color: #5b21b6; }
+.theme-wax .inv-kicker, .theme-wax .inv-divider { color: #b45309; }
+.theme-wax .inv-date .inv-side { border-color: #d97706; }
+.theme-wax .inv-guest { background: #fde7c6; border: 1px solid #f0c35a; }
+
+/* Ivoire : crème, or, ornements fins */
+.theme-ivoire { color: #3d3326; background: radial-gradient(80% 50% at 50% 0%, #fffdf7, #f7efdf); border: 1px solid #e6d3a8; box-shadow: inset 0 0 0 10px #fbf5e9, inset 0 0 0 11px #d9b96a, 0 14px 40px rgba(120,90,30,.18); }
+.theme-ivoire .orn { filter: sepia(1) saturate(2) brightness(.8); }
+.theme-ivoire .inv-hosts, .theme-ivoire .inv-day { color: #a67c1f; }
+.theme-ivoire .inv-kicker, .theme-ivoire .inv-divider { color: #b8913a; }
+.theme-ivoire .inv-date .inv-side { border-color: #d9b96a; }
+.theme-ivoire .inv-guest { background: #fff; border: 1px solid #e6d3a8; }
+
+/* Choix du modèle */
+.theme-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 600px) { .theme-grid { grid-template-columns: repeat(4, 1fr); } }
+.theme-grid label { position: relative; }
+.theme-grid input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.theme-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 14px; border: 2px solid transparent; min-height: 78px; justify-content: flex-end; font-size: .78rem; }
+.theme-tile strong { font-size: .95rem; }
+.theme-grid input:checked + .theme-tile { border-color: var(--violet-700); box-shadow: 0 0 0 3px var(--violet-200); }
+.theme-grid input:focus-visible + .theme-tile { outline: 3px solid var(--violet-400); outline-offset: 2px; }
+.swatch-royal { background: linear-gradient(160deg, #5b21b6, #1e0f45); color: #fbe7b5; }
+.swatch-photo { background: linear-gradient(180deg, #c9b8e8 0 45%, #fff 45%); color: var(--violet-950); border-color: var(--line); }
+.swatch-wax { background: repeating-linear-gradient(45deg, #fde7c6 0 8px, #f7d9a8 8px 16px); color: #7c2d12; box-shadow: inset 0 0 0 4px #b45309; }
+.swatch-ivoire { background: linear-gradient(160deg, #fffdf7, #f3e6c8); color: #6b5320; box-shadow: inset 0 0 0 2px #d9b96a; }

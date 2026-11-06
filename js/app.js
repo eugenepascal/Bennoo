@@ -470,10 +470,11 @@ const orga = (() => {
     return d.exists ? { ...d.data(), startsAt: toDate(d.data().startsAt) } : null;
   }
   /** Publie (ou met à jour) le carton : reprend le titre, la date et le lieu de l'événement. */
-  async function saveInvitation(fid, eid, event, { hosts, message }) {
+  async function saveInvitation(fid, eid, event, { hosts, message, theme, cover }) {
     await ev(fid, eid).collection("public").doc("invitation").set({
       title: event.title, type: event.type, startsAt: ts(event.startsAt), venue: event.venue || null, city: event.city || null,
-      hosts: hosts || null, message: message || null, updatedAt: now(),
+      hosts: hosts || null, message: message || null, theme: INVITE_THEMES[theme] ? theme : "royal",
+      cover: PHOTOS[event.cover] ? event.cover : (PHOTOS[cover] ? cover : null), updatedAt: now(),
     });
   }
   /** Après modification de l'événement : le carton déjà publié suit (titre, date, lieu). */
@@ -1543,7 +1544,7 @@ function editEventForm(fid, eid, e, base) {
           venue: v.venue.trim(), city: v.city.trim(), currency: v.currency, budgetPlanned: parseAmount(v.budget, v.currency), expectedGuests: guests,
           cover: PHOTOS[v.cover] ? v.cover : coverOf(e),
         });
-        await orga.syncInvitation(fid, eid, { title, type: v.type, startsAt: v.startsAt ? new Date(v.startsAt) : null, venue: v.venue.trim(), city: v.city.trim() });
+        await orga.syncInvitation(fid, eid, { title, type: v.type, startsAt: v.startsAt ? new Date(v.startsAt) : null, venue: v.venue.trim(), city: v.city.trim(), cover: PHOTOS[v.cover] ? v.cover : coverOf(e) });
         toast("Événement mis à jour");
         location.hash = base;
       } catch (err) {
@@ -2224,18 +2225,65 @@ function rsvpMessage(event, household, url) {
   return `Bonjour ${household} ! Vous êtes invités à « ${event.title} »${event.startsAt ? ` le ${formatDate(event.startsAt)}` : ""}. Merci de nous répondre ici : ${url}`;
 }
 
+/* ─── Cartons d'invitation : 4 modèles au choix de l'organisateur ───────── */
+const INVITE_THEMES = {
+  royal: ["Royal", "Violet nuit et or, ornements dorés"],
+  photo: ["Photo", "Votre photo de couverture en tête"],
+  wax: ["Wax", "Motifs géométriques terre et or"],
+  ivoire: ["Ivoire", "Crème et or, sobre et élégant"],
+};
+/** Formule d'invitation selon la cérémonie (avec ou sans hôtes nommés). */
+const INVITE_LEAD = {
+  WEDDING: ["ont la joie de vous convier à leur mariage", "Vous êtes conviés au mariage"],
+  NAMING_CEREMONY: ["ont la joie de vous convier au baptême de leur enfant", "Vous êtes conviés au baptême"],
+  COMMUNION: ["ont la joie de vous convier à la communion", "Vous êtes conviés à la communion"],
+  BIRTHDAY: ["vous invitent à fêter l'anniversaire", "Vous êtes invités à l'anniversaire"],
+  RELIGIOUS_CEREMONY: ["vous convient à la cérémonie religieuse", "Vous êtes conviés à la cérémonie religieuse"],
+  FAMILY_REUNION: ["vous invitent à la réunion de famille", "Vous êtes invités à la réunion de famille"],
+  TRADITIONAL_CEREMONY: ["vous convient à la cérémonie traditionnelle", "Vous êtes conviés à la cérémonie traditionnelle"],
+  CUSTOM: ["ont le plaisir de vous inviter", "Vous êtes invités"],
+};
+
+function ornamentDivider() {
+  return h("div", { class: "inv-divider", "aria-hidden": "true" }, h("span", {}), h("i", {}, "❖"), h("span", {}));
+}
+
 function invitationCard(inv, guest) {
+  const theme = INVITE_THEMES[inv.theme] ? inv.theme : "royal";
   const date = inv.startsAt;
-  return h("section", { class: "invitation" }, h("span", { class: "orn orn-tl", "aria-hidden": "true" }), h("span", { class: "orn orn-br", "aria-hidden": "true" }),
-    h("p", { class: "inv-hosts" }, inv.hosts || inv.title),
-    h("p", { class: "inv-lead" }, inv.hosts ? "ont le plaisir de vous inviter" : "Vous êtes invités"),
-    inv.hosts ? h("p", { class: "inv-title" }, inv.title) : null,
-    date ? h("p", { class: "inv-day" }, String(date.getDate())) : null,
-    date ? h("p", { class: "inv-month" }, new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(date).toUpperCase()) : h("p", { class: "inv-month" }, "DATE À CONFIRMER"),
-    date ? h("p", { class: "inv-time" }, date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")) : null,
-    [inv.venue, inv.city].filter(Boolean).length ? h("p", { class: "inv-place" }, `À ${[inv.venue, inv.city].filter(Boolean).join(", ")}`) : null,
-    inv.message ? h("p", { class: "inv-message" }, inv.message) : null,
-    guest ? h("p", { class: "inv-guest" }, `${guest.household} · ${plural(guest.seats, "place")} réservée${guest.seats > 1 ? "s" : ""}`) : null);
+  const [withHosts, without] = INVITE_LEAD[inv.type] ?? INVITE_LEAD.CUSTOM;
+  const place = [inv.venue, inv.city].filter(Boolean).join(", ");
+  const weekday = date ? new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(date) : null;
+  const card = h("section", { class: `invitation theme-${theme}`, "aria-label": `Carton d'invitation : ${inv.title}` },
+    theme === "photo" ? photoBackground(h("div", { class: "inv-photo", "aria-hidden": "true" }), inv.cover && PHOTOS[inv.cover] ? inv.cover : (COVERS[inv.type] ?? COVERS.CUSTOM)[0], 900, 560,
+      "linear-gradient(180deg, rgba(30,15,69,0) 40%, rgba(30,15,69,.55))") : null,
+    theme === "royal" || theme === "ivoire" ? [h("span", { class: "orn orn-tl", "aria-hidden": "true" }), h("span", { class: "orn orn-br", "aria-hidden": "true" })] : null,
+    h("div", { class: "inv-inner" },
+      h("p", { class: "inv-kicker" }, EVENT_TYPES[inv.type] ?? "Invitation"),
+      inv.hosts ? h("p", { class: "inv-hosts" }, inv.hosts) : null,
+      h("p", { class: "inv-lead" }, inv.hosts ? withHosts : without),
+      h("p", { class: "inv-title" }, inv.title),
+      ornamentDivider(),
+      date ? h("div", { class: "inv-date" },
+        h("span", { class: "inv-side" }, weekday),
+        h("span", { class: "inv-day" }, String(date.getDate())),
+        h("span", { class: "inv-side" }, new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(date)))
+        : h("p", { class: "inv-month" }, "Date à confirmer"),
+      date ? h("p", { class: "inv-time" }, `à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")}`) : null,
+      place ? h("p", { class: "inv-place" }, h("span", { "aria-hidden": "true" }, "📍 "), place) : null,
+      inv.message ? [ornamentDivider(), h("p", { class: "inv-message" }, `« ${inv.message} »`)] : null,
+      guest ? h("p", { class: "inv-guest" }, h("span", {}, guest.household), h("span", {}, `${plural(guest.seats, "place")} réservée${guest.seats > 1 ? "s" : ""}`)) : null));
+  return card;
+}
+
+/** Choix du modèle : vignettes cliquables, aperçu mis à jour aussitôt. */
+function themePicker(current, onPick) {
+  return h("fieldset", { class: "field" }, h("legend", { class: "label" }, "Modèle du carton"),
+    h("div", { class: "theme-grid" }, Object.entries(INVITE_THEMES).map(([k, [label, sub]]) => {
+      const input = h("input", { type: "radio", name: "theme", value: k, checked: k === current });
+      input.addEventListener("change", () => onPick(k));
+      return h("label", {}, input, h("span", { class: `theme-tile swatch-${k}` }, h("strong", {}, label), h("span", {}, sub)));
+    })));
 }
 
 async function guestsPanel(ctx, view) {
@@ -2248,23 +2296,28 @@ async function guestsPanel(ctx, view) {
   const tabs = subTabs([[`${base}/invites`, "Invités", "liste"], [`${base}/invites/carton`, "Carton d'invitation", "carton"]], current);
 
   if (current === "carton") {
+    const base0 = invitation ?? { title: event.title, type: event.type, startsAt: event.startsAt, venue: event.venue, city: event.city, hosts: null, message: null };
+    const draft = { ...base0, cover: coverOf(event), theme: invitation?.theme ?? "royal" };
+    const previewBox = h("div", {}, invitationCard(draft));
+    const redraw = () => previewBox.replaceChildren(invitationCard(draft));
     const form = h("form", { class: "card form", novalidate: true },
+      themePicker(draft.theme, (k) => { draft.theme = k; redraw(); }),
       field("Qui invite ?", { name: "hosts", class: "input", maxlength: 120, value: invitation?.hosts ?? "", placeholder: "Ex. Fatou & Mamadou" }, "Affiché en grand sur le carton. Laissez vide pour afficher le nom de l'événement."),
       field("Message (facultatif)", { name: "message", tag: "textarea", class: "input", maxlength: 500 }),
       h("button", { type: "submit", class: "btn btn-primary btn-block" }, invitation ? "Mettre à jour le carton" : "Publier le carton"));
     form.elements.message.value = invitation?.message ?? "";
+    form.addEventListener("input", () => { draft.hosts = form.elements.hosts.value.trim() || null; draft.message = form.elements.message.value.trim() || null; redraw(); });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const v = values(form);
-      await withBusy(form.querySelector("button"), async () => {
-        try { await orga.saveInvitation(fid, eid, event, { hosts: v.hosts.replace(/\s+/g, " ").trim(), message: v.message.trim() }); toast("Carton publié"); reload(); }
+      await withBusy(form.querySelector("button[type=submit]"), async () => {
+        try { await orga.saveInvitation(fid, eid, event, { hosts: v.hosts.replace(/\s+/g, " ").trim(), message: v.message.trim(), theme: draft.theme }); toast("Carton publié"); reload(); }
         catch (err) { showFormError(form, errMsg(err)); }
       });
     });
-    const preview = invitation ?? { title: event.title, type: event.type, startsAt: event.startsAt, venue: event.venue, city: event.city, hosts: null, message: null };
     return h("div", { class: "form" }, tabs,
-      h("p", { class: "muted small" }, invitation ? "Aperçu du carton tel que vos invités le voient. Le titre, la date et le lieu suivent automatiquement l'événement." : "Aperçu (non publié). Le carton est publié automatiquement à l'ajout du premier invité."),
-      invitationCard(preview), form);
+      h("p", { class: "muted small" }, invitation ? "Aperçu du carton tel que vos invités le voient. Changez de modèle ou de texte : l'aperçu suit, puis « Mettre à jour le carton »." : "Aperçu (non publié). Choisissez un modèle et publiez ; sinon il est publié en « Royal » à l'ajout du premier invité."),
+      previewBox, form);
   }
 
   const form = h("form", { class: "card form", novalidate: true },

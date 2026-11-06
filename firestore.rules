@@ -378,7 +378,9 @@ service cloud.firestore {
           allow get: if docId == 'invitation';
           allow list, delete: if false;
           allow create, update: if verified() && isOrganizer(fid, eid) && docId == 'invitation'
-            && data().keys().hasOnly(['title', 'type', 'startsAt', 'venue', 'city', 'hosts', 'message', 'updatedAt'])
+            && data().keys().hasOnly(['title', 'type', 'startsAt', 'venue', 'city', 'hosts', 'message', 'theme', 'cover', 'updatedAt'])
+            && data().get('theme', 'royal') in ['royal', 'photo', 'wax', 'ivoire']
+            && (data().get('cover', null) == null || data().get('cover', null) in coverKeys())
             && text(data().title, 1, 120) && data().type in eventTypes() && optDate(data().startsAt)
             && optText(data().venue, 200) && optText(data().city, 120)
             && optText(data().hosts, 120) && optText(data().message, 500)
