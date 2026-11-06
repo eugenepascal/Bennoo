@@ -170,18 +170,39 @@ const data = (() => {
   async function saveProfile({ displayName, phone }) {
     const ref = db.collection("users").doc(uid());
     const existing = await ref.get();
+    const photo = existing.exists ? existing.data().photo ?? null : null; // la photo est gérée à part
     await ref.set({
-      displayName, phone, locale: "fr",
+      displayName, phone, locale: "fr", ...(photo ? { photo } : {}),
       createdAt: existing.exists ? existing.data().createdAt : serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
   }
+  async function myPhoto() { return (await getProfile().catch(() => null))?.photo ?? null; }
+  const withPhoto = (photo) => (photo ? { photo } : {});
+  /** Enregistre (ou retire) la photo de profil, puis la recopie dans chaque famille et chaque
+   *  événement : c'est là que les autres la voient (le profil, lui, reste privé). */
+  async function setProfilePhoto(photo) {
+    const me = uid();
+    const value = photo ?? firebase.firestore.FieldValue.delete();
+    await db.collection("users").doc(me).update({ photo: value, updatedAt: serverTimestamp() });
+    const [members, parts] = await Promise.all([
+      db.collectionGroup("members").where("uid", "==", me).get(),
+      db.collectionGroup("participants").where("uid", "==", me).get(),
+    ]);
+    const refs = [...members.docs, ...parts.docs].map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = db.batch();
+      refs.slice(i, i + 400).forEach((r) => batch.update(r, { photo: value }));
+      await batch.commit();
+    }
+  }
   async function createFamily(name, displayName) {
     const me = uid();
+    const photo = await myPhoto();
     const ref = db.collection("families").doc();
     const batch = db.batch();
     batch.set(ref, { name, createdBy: me, createdAt: serverTimestamp() });
-    batch.set(ref.collection("members").doc(me), { uid: me, role: "owner", displayName, joinedAt: serverTimestamp() });
+    batch.set(ref.collection("members").doc(me), { uid: me, role: "owner", displayName, joinedAt: serverTimestamp(), ...withPhoto(photo) });
     await batch.commit();
     return ref.id;
   }
@@ -230,8 +251,8 @@ const data = (() => {
     return { ...d, expired: d.expiresAt.toMillis() <= Date.now() };
   }
   async function isFamilyMember(fid) { return (await fam(fid).collection("members").doc(uid()).get()).exists; }
-  const joinFamily = (fid, token, displayName) => fam(fid).collection("members").doc(uid()).set({
-    uid: uid(), role: "member", displayName, joinedAt: serverTimestamp(), inviteToken: token,
+  const joinFamily = async (fid, token, displayName) => fam(fid).collection("members").doc(uid()).set({
+    uid: uid(), role: "member", displayName, joinedAt: serverTimestamp(), inviteToken: token, ...withPhoto(await myPhoto()),
   });
 
   const payload = (e) => ({
@@ -245,7 +266,7 @@ const data = (() => {
     const ref = fam(fid).collection("events").doc();
     const batch = db.batch();
     batch.set(ref, { ...payload(e), status: "active", createdBy: me, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    batch.set(ref.collection("participants").doc(me), { uid: me, role: "organizer", displayName, addedAt: serverTimestamp() });
+    batch.set(ref.collection("participants").doc(me), { uid: me, role: "organizer", displayName, addedAt: serverTimestamp(), ...withPhoto(await myPhoto()) });
     await batch.commit();
     return ref.id;
   }
@@ -271,7 +292,7 @@ const data = (() => {
     const order = { organizer: 0, treasurer: 1, member: 2 };
     return s.docs.map((d) => d.data()).sort((a, b) => order[a.role] - order[b.role] || a.displayName.localeCompare(b.displayName, "fr"));
   }
-  const addParticipant = (fid, eid, m, role) => ev(fid, eid).collection("participants").doc(m.uid).set({ uid: m.uid, role, displayName: m.displayName, addedAt: serverTimestamp() });
+  const addParticipant = (fid, eid, m, role) => ev(fid, eid).collection("participants").doc(m.uid).set({ uid: m.uid, role, displayName: m.displayName, addedAt: serverTimestamp(), ...withPhoto(m.photo) });
   const setParticipantRole = (fid, eid, pid, role) => ev(fid, eid).collection("participants").doc(pid).update({ role });
   const removeParticipant = (fid, eid, pid) => ev(fid, eid).collection("participants").doc(pid).delete();
   async function getMyFamilyDisplayName(fid) {
@@ -279,7 +300,7 @@ const data = (() => {
     return s.exists ? s.data().displayName : null;
   }
 
-  return { renameFamily, setEventStatus, getProfile, saveProfile, createFamily, listMyFamilies, getFamily, listFamilyMembers, setFamilyRole, removeFamilyMember,
+  return { setProfilePhoto, renameFamily, setEventStatus, getProfile, saveProfile, createFamily, listMyFamilies, getFamily, listFamilyMembers, setFamilyRole, removeFamilyMember,
     createInvite, listInvites, revokeInvite, getInvite, isFamilyMember, joinFamily, createEvent, updateEvent, listMyEvents,
     getEvent, listParticipants, addParticipant, setParticipantRole, removeParticipant, getMyFamilyDisplayName };
 })();
@@ -843,11 +864,12 @@ function initials(name) {
   const parts = String(name || "?").trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
-function avatar(name, cls = "") {
+function avatar(name, cls = "", photoData = null) {
   let hash = 0;
   for (const c of String(name)) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-  const el = h("span", { class: `avatar ${cls}`, "aria-hidden": "true" }, initials(name));
+  const el = h("span", { class: `avatar ${cls}${photoData ? " has-photo" : ""}`, "aria-hidden": "true" }, initials(name));
   el.style.background = AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  if (typeof photoData === "string" && photoData.startsWith("data:image/jpeg;base64,")) el.append(h("img", { src: photoData, alt: "" }));
   return el;
 }
 
@@ -1154,7 +1176,7 @@ async function familyScreen(fid, tab = "membres") {
   } else {
     body = h("div", { class: "form" },
       h("ul", { class: "list card-flat" }, members.map((m) => h("li", {},
-        h("a", { href: `#/famille/${enc(fid)}/membre/${enc(m.uid)}`, class: "item" }, avatar(m.displayName),
+        h("a", { href: `#/famille/${enc(fid)}/membre/${enc(m.uid)}`, class: "item" }, avatar(m.displayName, "", m.photo),
           h("span", { class: "grow" }, h("span", { class: "title" }, m.displayName + (m.uid === myUid ? " (vous)" : "")), h("span", { class: `sub role-${m.role}` }, FAMILY_ROLES[m.role])),
           h("span", { class: "chev", "aria-hidden": "true" }, "›"))))),
       isAdmin
@@ -1268,7 +1290,7 @@ async function memberScreen(fid, uid) {
 
   const node = screen(
     header("Détail du membre", `#/famille/${enc(fid)}/membres`),
-    h("section", { class: "card", }, h("div", { class: "auth-brand" }, avatar(m.displayName, "lg"), h("h2", {}, m.displayName), h("span", { class: "chip chip-violet" }, FAMILY_ROLES[m.role])),
+    h("section", { class: "card", }, h("div", { class: "auth-brand" }, avatar(m.displayName, "lg", m.photo), h("h2", {}, m.displayName), h("span", { class: "chip chip-violet" }, FAMILY_ROLES[m.role])),
       h("dl", { class: "facts", style: null }, h("dt", {}, "Famille"), h("dd", {}, family.name),
         h("dt", {}, "Membre depuis"), h("dd", {}, m.joinedAt?.toDate ? formatDate(m.joinedAt.toDate()) : "—"))),
     actions,
@@ -1400,7 +1422,7 @@ async function newEventScreen(presetFid, presetType) {
           members.length === 0
             ? h("div", { class: "card empty" }, h("strong", {}, "Vous êtes pour l'instant le seul membre de cette famille."), h("span", {}, "Invitez vos proches depuis la page Famille, puis ajoutez-les à l'événement."))
             : h("ul", { class: "list card-flat" }, members.map((m) => h("li", { class: "pick" },
-              h("label", { class: "check grow" }, h("input", { type: "checkbox", name: `pick-${m.uid}`, checked: Boolean(state.picks[m.uid]) }), avatar(m.displayName), h("span", {}, m.displayName)),
+              h("label", { class: "check grow" }, h("input", { type: "checkbox", name: `pick-${m.uid}`, checked: Boolean(state.picks[m.uid]) }), avatar(m.displayName, "", m.photo), h("span", {}, m.displayName)),
               h("select", { class: "input", name: `role-${m.uid}`, "aria-label": `Rôle de ${m.displayName}` },
                 ["member", "treasurer", "organizer"].map((r) => h("option", { value: r, selected: (state.picks[m.uid] ?? "member") === r }, EVENT_ROLES[r]))))))];
     }
@@ -1463,7 +1485,7 @@ async function participantsPanel(fid, eid, participants, isOrganizer, myUid) {
       if (!confirm(`Retirer ${p.displayName} de l'événement ?`)) return;
       try { await data.removeParticipant(fid, eid, p.uid); toast("Participant retiré"); window.dispatchEvent(new Event("hashchange")); } catch (err) { toast(errMsg(err)); }
     }));
-    return h("li", { class: "item participant" }, avatar(p.displayName),
+    return h("li", { class: "item participant" }, avatar(p.displayName, "", p.photo),
       h("span", { class: "grow" }, h("span", { class: "title" }, p.displayName + (p.uid === myUid ? " (vous)" : "")),
         editable ? null : h("span", { class: "sub" }, EVENT_ROLES[p.role])),
       editable ? h("div", { class: "controls" },
@@ -2585,7 +2607,7 @@ async function homeScreen() {
   const hour = new Date().getHours();
   const hello = hour < 5 || hour >= 18 ? "Bonsoir" : "Bonjour";
   const head = h("div", { class: "hello home-hello" },
-    avatar(name, "sq"),
+    h("a", { href: "#/profil", "aria-label": "Mon profil", class: "avatar-link" }, avatar(name, "sq", profile?.photo)),
     h("div", { class: "grow" }, h("p", { class: "muted small today" }, today), h("h1", {}, `${hello} ${firstName(name)} 👋`)),
     search);
 
@@ -3450,7 +3472,7 @@ async function settingsScreen() {
     h("span", { class: "grow" }, h("span", { class: "title" }, title), sub ? h("span", { class: "sub" }, sub) : null), h("span", { class: "chev", "aria-hidden": "true" }, "›")));
   const node = screen(
     header("Paramètres"),
-    h("section", { class: "card hello" }, avatar(name), h("div", { class: "grow" }, h("h2", {}, name), h("p", { class: "muted small" }, auth.currentUser.email))),
+    h("a", { href: "#/profil", class: "card hello profile-card" }, avatar(name, "", profile?.photo), h("div", { class: "grow" }, h("h2", {}, name), h("p", { class: "muted small" }, auth.currentUser.email)), h("span", { class: "chev", "aria-hidden": "true" }, "›")),
     h("ul", { class: "list card-flat settings" },
       row("#/bienvenue", "📖", "Guide de Bennoo", "À quoi sert Bennoo et comment s'en servir"),
       row("#/profil", "👤", "Mon profil", "Nom et téléphone"),
@@ -3464,6 +3486,60 @@ async function settingsScreen() {
         h("span", { class: "grow" }, h("span", { class: "title danger" }, "Supprimer mon compte"), h("span", { class: "sub" }, "Définitif")), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
   );
   return { node, title: "Paramètres", nav: "more" };
+}
+
+/** Image choisie -> carré 256 px en JPEG (≈ 15 à 40 Ko), recadré au centre. */
+async function squarePhoto(source) {
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image(); i.crossOrigin = "anonymous";
+    i.onload = () => resolve(i); i.onerror = () => reject(new Error("Image illisible. Essayez une autre photo (JPEG ou PNG)."));
+    i.src = source;
+  });
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+  for (const q of [0.82, 0.7, 0.55, 0.4]) {
+    const url = c.toDataURL("image/jpeg", q);
+    if (url.length < 60000) return url;
+  }
+  throw new Error("Photo trop lourde, essayez-en une autre.");
+}
+
+function photoEditor(profile, name) {
+  let current = profile.photo ?? null;
+  const preview = h("div", { class: "photo-edit-preview" }, avatar(name, "xl", current));
+  const status = h("p", { class: "muted small", role: "status" });
+  const file = h("input", { type: "file", accept: "image/*", class: "sr-only", id: "photo-file" });
+  const pick = h("label", { for: "photo-file", class: "btn btn-primary btn-sm" }, current ? "Changer la photo" : "Ajouter une photo");
+  const remove = h("button", { type: "button", class: "btn btn-sm", hidden: !current }, "Retirer");
+  const google = auth.currentUser.photoURL ? h("button", { type: "button", class: "btn btn-sm" }, "Utiliser ma photo Google") : null;
+  const apply = async (dataUrl) => {
+    status.textContent = "Enregistrement… la photo est recopiée dans vos familles et événements.";
+    try {
+      await data.setProfilePhoto(dataUrl);
+      current = dataUrl;
+      preview.replaceChildren(avatar(name, "xl", current));
+      pick.textContent = current ? "Changer la photo" : "Ajouter une photo";
+      remove.hidden = !current;
+      status.textContent = current ? "Photo enregistrée : vos proches la voient maintenant." : "Photo retirée.";
+    } catch (err) { status.textContent = ""; toast(errMsg(err)); }
+  };
+  file.addEventListener("change", async () => {
+    const f = file.files?.[0];
+    file.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { toast("Choisissez une image."); return; }
+    const url = URL.createObjectURL(f);
+    try { await apply(await squarePhoto(url)); } catch (err) { toast(err.message); } finally { URL.revokeObjectURL(url); }
+  });
+  remove.addEventListener("click", () => withBusy(remove, () => apply(null)));
+  google?.addEventListener("click", () => withBusy(google, async () => {
+    try { await apply(await squarePhoto(auth.currentUser.photoURL.replace(/=s\d+-c$/, "=s400-c"))); }
+    catch { toast("Impossible de récupérer la photo Google : ajoutez une photo depuis votre appareil."); }
+  }));
+  return h("section", { class: "card form photo-edit" }, h("h2", {}, "Photo de profil"), preview,
+    h("div", { class: "row-actions" }, pick, google, remove), file, status,
+    h("p", { class: "muted small" }, "Visible par les membres de vos familles et les participants de vos événements. Elle est réduite à une petite image carrée."));
 }
 
 async function profileScreen() {
@@ -3488,7 +3564,7 @@ async function profileScreen() {
       }
     });
   });
-  return { node: screen(header("Mon profil", "#/plus"), form), title: "Mon profil", nav: "more" };
+  return { node: screen(header("Mon profil", "#/plus"), photoEditor(profile, profile.displayName || auth.currentUser.email), form), title: "Mon profil", nav: "more" };
 }
 
 // ─── Erreurs ──────────────────────────────────────────────────────────────

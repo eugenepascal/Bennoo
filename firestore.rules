@@ -38,6 +38,8 @@ service cloud.firestore {
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function optText(v, max) { return v == null || text(v, 0, max); }
+    // Photo de profil : petite image JPEG en base64 (moins de 70 000 caractères, environ 50 Ko).
+    function validPhoto(v) { return v == null || (v is string && v.size() < 70000 && v.matches('^data:image/jpeg;base64,[A-Za-z0-9+/=]+$')); }
 
     function familyPath(fid) { return /databases/$(database)/documents/families/$(fid); }
     function memberPath(fid, uid) { return /databases/$(database)/documents/families/$(fid)/members/$(uid); }
@@ -65,8 +67,8 @@ service cloud.firestore {
     // ─── Profil : visible et modifiable par son seul propriétaire ────────────
     match /users/{userId} {
       function validProfile() {
-        return data().keys().hasOnly(['displayName', 'phone', 'locale', 'createdAt', 'updatedAt'])
-          && text(data().displayName, 1, 80)
+        return data().keys().hasOnly(['displayName', 'phone', 'locale', 'photo', 'createdAt', 'updatedAt'])
+          && text(data().displayName, 1, 80) && validPhoto(data().get('photo', null))
           && (data().phone == null || (data().phone is string && data().phone.matches('^\\+[1-9][0-9]{6,14}$')))
           && data().locale in ['fr']
           && data().updatedAt == request.time;
@@ -95,8 +97,8 @@ service cloud.firestore {
       // Appartenances
       match /members/{memberId} {
         function validMember() {
-          return data().keys().hasOnly(['uid', 'role', 'displayName', 'joinedAt', 'inviteToken', 'transferTo'])
-            && data().uid == memberId && text(data().displayName, 1, 80);
+          return data().keys().hasOnly(['uid', 'role', 'displayName', 'joinedAt', 'inviteToken', 'transferTo', 'photo'])
+            && data().uid == memberId && text(data().displayName, 1, 80) && validPhoto(data().get('photo', null));
         }
         function validInvite(token) {
           return token is string
@@ -115,7 +117,7 @@ service cloud.firestore {
         allow update: if verified() && (
           (isFamilyAdmin(fid) && memberId != me() && resource.data.role != 'owner'
             && changed().hasOnly(['role']) && data().role in ['admin', 'member'])
-          || (memberId == me() && changed().hasOnly(['displayName']) && text(data().displayName, 1, 80))
+          || (memberId == me() && changed().hasOnly(['displayName', 'photo']) && text(data().displayName, 1, 80) && validPhoto(data().get('photo', null)))
           // Transmission de la famille, en un seul lot : le propriétaire devient administrateur
           // en désignant (transferTo) le membre qui devient propriétaire.
           || (memberId == me() && resource.data.role == 'owner' && data().role == 'admin'
@@ -177,8 +179,8 @@ service cloud.firestore {
 
         match /participants/{pid} {
           function validParticipant() {
-            return data().keys().hasOnly(['uid', 'role', 'displayName', 'addedAt', 'handoverTo'])
-              && data().uid == pid && text(data().displayName, 1, 80)
+            return data().keys().hasOnly(['uid', 'role', 'displayName', 'addedAt', 'handoverTo', 'photo'])
+              && data().uid == pid && text(data().displayName, 1, 80) && validPhoto(data().get('photo', null))
               && data().role in ['organizer', 'treasurer', 'member'];
           }
           allow read: if verified() && isParticipant(fid, eid);
@@ -188,7 +190,8 @@ service cloud.firestore {
               && getAfter(eventPath(fid, eid)).data.createdBy == me())
             // un organisateur ajoute un membre de la famille
             || (isOrganizer(fid, eid) && exists(memberPath(fid, pid))
-                && data().displayName == get(memberPath(fid, pid)).data.displayName)
+                && data().displayName == get(memberPath(fid, pid)).data.displayName
+                && data().get('photo', null) == get(memberPath(fid, pid)).data.get('photo', null))
           );
           // Un organisateur change le rôle des AUTRES : il reste donc toujours au moins un organisateur.
           allow update: if verified() && validParticipant() && (
@@ -199,6 +202,8 @@ service cloud.firestore {
               && get(participantPath(fid, eid, data().handoverTo)).data.role == 'organizer')
             // suppression du compte : le nom est remplacé quand la ligne doit rester
             || (pid == me() && changed().hasOnly(['displayName']) && data().displayName == 'Compte supprimé')
+            // chacun met à jour sa propre photo
+            || (pid == me() && changed().hasOnly(['photo']))
           );
           allow delete: if verified() && (
             (isOrganizer(fid, eid) && pid != me())

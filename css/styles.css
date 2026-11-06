@@ -646,3 +646,13 @@ details.archived[open] summary { margin-bottom: 8px; }
 .quick { display: grid; grid-template-columns: 40px 1fr; column-gap: 10px; align-items: center; padding: 10px 12px; }
 .quick .q-ico { grid-row: span 2; margin: 0; }
 .quick strong { line-height: 1.2; }
+
+/* ─── Photo de profil (06/11/2026) ─── */
+.avatar { position: relative; overflow: hidden; }
+.avatar.has-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.avatar.xl { width: 112px; height: 112px; font-size: 2.2rem; box-shadow: 0 0 0 4px #fff, 0 0 0 6px var(--violet-200); }
+.photo-edit { align-items: center; text-align: center; }
+.photo-edit .row-actions { flex-wrap: wrap; justify-content: center; }
+.photo-edit label.btn { cursor: pointer; }
+.avatar-link { border-radius: 16px; }
+.profile-card { text-decoration: none; color: inherit; }
