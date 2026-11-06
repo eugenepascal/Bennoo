@@ -104,6 +104,7 @@ dans les maquettes. Sur ordinateur, elle devient une barre latérale violette (m
 | Bandeaux photo des rubriques Mes tâches et Budget, états vides illustrés | Tâches, Budget, Invités |
 | **Aide intégrée** : encadré repliable « À quoi sert cette page ? » en haut de chaque page (textes dans `HELP`, js/app.js) ; choix replié/ouvert mémorisé sur l'appareil | Toutes les pages |
 | **Page de bienvenue** : but de Bennoo, 5 étapes, vie privée ; affichée une fois après la première connexion sur l'appareil, puis depuis Plus → Guide de Bennoo | `#/bienvenue` |
+| **Langues : français, anglais, wolof (bêta)** — choix sur l'appareil (Paramètres, écran de lancement, connexion, inscription, page de réponse des invités). Le code reste en français ; `js/i18n.js` traduit à l'affichage grâce aux dictionnaires `js/i18n/en.js` (≈ 870 textes + motifs pour les phrases avec nombres ou noms) et `js/i18n/wo.js` (≈ 430 textes de l'interface). Texte absent du dictionnaire = reste en français. Dates, heures et montants suivent la langue (mois et jours en wolof). Vérifier la couverture : `node outils/i18n-couverture.js en` (ou `wo`) | Partout |
 | Visuel revu le 04/11/2026 : fond blanc, cartes fines, accueil comme la maquette 4 (photo + barre d'avancement, activité récente sur ordinateur seulement), bandeau photo de l'événement avec le titre dessous (maquette 7), tête de famille à photo ronde (maquette 5), chiffres courts « 4 200 000 F », anneau du budget coloré par provenance, lancement « Commencer » + « Déjà un compte ? Se connecter » | Partout |
 
 ### Types d'événements
@@ -371,7 +372,7 @@ par **Firebase Authentication**, sans règle à écrire.
 carte, via un prestataire agréé) · notifications automatiques (push, email, WhatsApp) · Diaspora Mode
 (voyage, hébergement, accueil des proches) · plan de table · documents partagés · Family Passport et
 arbre familial · Bennoo Copilot (assistant IA) · Yond Live (jour J, programme, carte, gamification) ·
-version en wolof · Bennoo Pro (prestataires et devis).
+wolof complet relu par des locuteurs natifs · Bennoo Pro (prestataires et devis).
 
 ---
 
@@ -387,11 +388,14 @@ version en wolof · Bennoo Pro (prestataires et devis).
 | 30/10/2026 | Application **statique** (index.html + css + js), comme Lumen et Yond | Simple à lire, à modifier et à mettre en ligne |
 | 30/10/2026 | Firestore **édition Standard**, région Europe | Gratuit au départ ; règles et index prévus pour cette édition |
 | 30/10/2026 | Ajout de la **connexion avec Google** | Demandée par le porteur du projet ; gratuite, email déjà vérifié par Google |
+| 06/11/2026 | **Traduction à l'affichage** (dictionnaire clé = texte français) plutôt que remplacer chaque texte du code par une clé | Aucune réécriture des écrans ; repli automatique en français. Limite : un texte saisi par un utilisateur identique à un texte de l'interface (ex. une tâche « Réserver la salle ») s'affiche traduit. Alternative écartée pour l'instant : clés `t("tasks.title")` partout (plus propre, mais ~1 200 textes à toucher) |
+| 06/11/2026 | Langue gardée **sur l'appareil** (localStorage), pas dans le profil | Pas de changement des règles Firestore ; limite : à refaire sur chaque appareil |
 
 ---
 
 ## 11. Limites connues
 
+- **Wolof en bêta** : environ la moitié des textes (navigation, boutons, statuts, titres) ; les aides longues, messages d'erreur détaillés et pages légales restent en français. Traductions faites sans locuteur natif : **à relire** avant ouverture au public. Les pages légales anglaises sont une traduction ; la version française fait foi.
 - **Sans Cloud Functions** (offre gratuite), les totaux visibles des simples membres sont recalculés quand
   l'organisateur ou le trésorier ouvre l'aperçu, le budget ou les invités : ils peuvent avoir un peu de
   retard (la date de mise à jour est affichée).
