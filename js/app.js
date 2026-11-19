@@ -839,7 +839,7 @@ const ICONS = {
   budget: "M3 7a3 3 0 0 1 3-3h12v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3zm3-1a1 1 0 0 0 0 2h10V6zm11 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
 };
 
-function icon(name) {
+function navIcon(name) {
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
@@ -854,7 +854,7 @@ function icon(name) {
 /** Barre de navigation : seules les rubriques déjà développées apparaissent (pas de lien mort). */
 function tabbar(active) {
   const link = (href, name, label, key) =>
-    h("a", { href, "aria-current": active === key ? "page" : null }, icon(name), h("span", {}, label));
+    h("a", { href, "aria-current": active === key ? "page" : null }, navIcon(name), h("span", {}, label));
   return h("nav", { class: "tabbar", "aria-label": "Navigation principale" },
     h("a", { href: "#/", class: "brand-side" }, h("img", { src: "images/logo.svg", alt: "" }), "Bennoo"),
     link("#/", "home", "Accueil", "home"),
