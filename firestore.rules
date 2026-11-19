@@ -1,7 +1,8 @@
 rules_version = '2';
 
-// Bennoo — règles d'accès Firestore (étapes 1 à 4 : comptes, familles, événements, tâches,
-// budget et contributions, invités et réponses).
+// Bennoo — règles d'accès Firestore : comptes, familles, événements, tâches, budget et
+// contributions, invités et réponses, programme, album photos, livre d'or, messages de la famille.
+// Explication détaillée, règle par règle : docs/regles-firestore.md
 //
 // Ces règles SONT la sécurité de l'application : le site est public, seul Firestore
 // décide qui lit et écrit quoi. Tout ce qui n'est pas autorisé ici est refusé.
@@ -13,6 +14,7 @@ rules_version = '2';
 //   families/{fid}                                    famille
 //   families/{fid}/members/{uid}                      appartenance (owner | admin | member)
 //   families/{fid}/invites/{token}                    lien d'invitation (7 jours)
+//   families/{fid}/posts/{id}                         message à la famille
 //   families/{fid}/events/{eid}                       événement
 //   families/{fid}/events/{eid}/participants/{uid}    rôle dans l'événement (organizer | treasurer | member)
 //     .../participants/{uid}/myContributions/{cid}    index personnel « mes contributions »
@@ -22,6 +24,8 @@ rules_version = '2';
 //   families/{fid}/events/{eid}/summary/{budget|guests}  totaux lisibles par tous les participants
 //   families/{fid}/events/{eid}/committees/{id}      comité (nom, membres)
 //   families/{fid}/events/{eid}/programme/{id}       programme du jour J (heure, moment, lieu)
+//   families/{fid}/events/{eid}/photos/{id}          album : miniature (+ full/image : grande image)
+//   families/{fid}/events/{eid}/messages/{id}        livre d'or
 //   families/{fid}/events/{eid}/guests/{jeton}        foyer invité, répond sans compte avec son lien
 //   families/{fid}/events/{eid}/public/invitation     carton d'invitation lisible avec le lien
 
@@ -150,18 +154,21 @@ service cloud.firestore {
         allow update: if false;
       }
 
-      // ─── Événements : visibles par leurs seuls participants ────────────────
       // ─── Messages de la famille : lus par tous les membres ──
       match /posts/{postId} {
         allow read: if verified() && isFamilyMember(fid);
         allow create: if verified() && isFamilyMember(fid)
           && data().keys().hasOnly(['text', 'authorName', 'authorPhoto', 'uid', 'createdAt'])
           && text(data().text, 1, 1000) && text(data().authorName, 1, 80) && validPhoto(data().authorPhoto)
-          && data().uid == me() && data().createdAt == request.time;
+          && data().uid == me() && data().createdAt == request.time
+          // l'auteur écrit sous son nom et sa photo de membre (pas sous ceux d'un autre)
+          && data().authorName == get(memberPath(fid, me())).data.displayName
+          && data().authorPhoto == get(memberPath(fid, me())).data.get('photo', null);
         allow delete: if verified() && isFamilyMember(fid) && (resource.data.uid == me() || isFamilyAdmin(fid));
         allow update: if false;
       }
 
+      // ─── Événements : visibles par leurs seuls participants ────────────────
       match /events/{eid} {
         function validEvent() {
           return data().keys().hasOnly(['type', 'title', 'description', 'startsAt', 'venue', 'city',
@@ -372,6 +379,7 @@ service cloud.firestore {
             && data().width is int && data().height is int && data().width > 0 && data().height > 0
             && data().width <= 4000 && data().height <= 4000
             && text(data().authorName, 1, 80) && data().uid == me() && data().createdAt == request.time
+            && data().authorName == get(participantPath(fid, eid, me())).data.displayName
             && existsAfter(/databases/$(database)/documents/families/$(fid)/events/$(eid)/photos/$(photoId)/full/image);
           allow delete: if verified() && isParticipant(fid, eid) && (resource.data.uid == me() || isOrganizer(fid, eid));
           allow update: if false;
@@ -395,7 +403,9 @@ service cloud.firestore {
           }
           allow read: if verified() && isParticipant(fid, eid);
           allow create: if verified() && isParticipant(fid, eid) && validMessage() && (
-            (data().kind == 'participant' && data().uid == me())
+            (data().kind == 'participant' && data().uid == me()
+              && data().authorName == get(participantPath(fid, eid, me())).data.displayName
+              && data().authorPhoto == get(participantPath(fid, eid, me())).data.get('photo', null))
             || (data().kind == 'guest' && data().uid == null && isOrganizer(fid, eid)));
           allow delete: if verified() && isParticipant(fid, eid)
             && ((resource.data.uid != null && resource.data.uid == me()) || isOrganizer(fid, eid));

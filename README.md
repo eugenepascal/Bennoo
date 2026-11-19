@@ -234,6 +234,8 @@ d'un responsable (la date de mise à jour est affichée).
 
 ## 6. Règles de sécurité Firestore expliquées
 
+> Explication complète, règle par règle, avec le tableau « qui peut faire quoi », les limites et les tests à faire après publication : [docs/regles-firestore.md](docs/regles-firestore.md).
+
 Le fichier [`firestore.rules`](firestore.rules) est **la** sécurité de Bennoo : le site est public,
 c'est Firebase qui décide, à chaque lecture et chaque écriture, si elle est autorisée.
 **Principe de base : tout ce qui n'est pas explicitement autorisé est refusé.**
