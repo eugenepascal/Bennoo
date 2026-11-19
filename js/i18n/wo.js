@@ -2,6 +2,9 @@
    Clé : le texte français exact affiché par l'application ; valeur : sa traduction.
    Un texte absent reste en français. Généré puis relu à la main ; voir js/i18n.js. */
 BennooI18n.add("wo", {
+ "Réservé pour": "Bu ñu dencal",
+ "Afficher la carte du lieu": "Wone kàrtu béreb bi",
+ "Bennoo est déjà installé": "Bennoo samp nañu ko ba noppi",
  "Souvenirs": "Fàttaliku",
  "Message supprimé": "Far nañu bataaxal bi",
  "Écrivez un message.": "Bindal bataaxal.",

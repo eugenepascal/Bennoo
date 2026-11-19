@@ -2,6 +2,10 @@
    Clé : le texte français exact affiché par l'application ; valeur : sa traduction.
    Un texte absent reste en français. Généré puis relu à la main ; voir js/i18n.js. */
 BennooI18n.add("en", {
+ "Réservé pour": "Reserved for",
+ "Afficher la carte du lieu": "Show the map of the place",
+ "Créer mon « Save the date »": "Create my \"Save the date\"",
+ "Bennoo est déjà installé": "Bennoo is already installed",
  "Souvenirs": "Memories",
  "Message supprimé": "Message deleted",
  "Écrivez un message.": "Write a message.",

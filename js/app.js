@@ -888,10 +888,73 @@ function header(title, backHref) {
   );
 }
 
-const EVENT_ICONS = {
-  WEDDING: "💍", NAMING_CEREMONY: "👶", COMMUNION: "🕊️", BIRTHDAY: "🎂",
-  RELIGIOUS_CEREMONY: "🕌", FAMILY_REUNION: "👨‍👩‍👧‍👦", TRADITIONAL_CEREMONY: "🥁", CUSTOM: "✨",
+/* ---------- Icônes (19/11/2026) ----------
+   Jeu d'icônes au trait dessiné pour Bennoo (24 × 24, couleur du texte) : remplace les émojis de
+   l'interface, qui changeaient d'aspect d'un téléphone à l'autre. Les émojis restent dans les textes. */
+const ICON_PATHS = {
+  book: ["M2.5 6c3-1.5 6-1.5 9.5 1 3.5-2.5 6.5-2.5 9.5-1v13c-3-1.5-6-1.5-9.5 1-3.5-2.5-6.5-2.5-9.5-1z", "M12 7v13"],
+  user: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21c0-4 3.6-7 8-7s8 3 8 7"],
+  users: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6", "M16 4.5a3 3 0 0 1 0 6", "M18 14.2c2.2.6 3.5 2.6 3.5 5.8"],
+  install: ["M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z", "M12 6v8", "M9 11l3 3 3-3", "M10 18h4"],
+  lock: ["M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z", "M8 11V7a4 4 0 0 1 8 0v4"],
+  file: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5", "M9 13h6", "M9 17h6"],
+  globe: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "M3 12h18", "M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"],
+  trash: ["M4 7h16", "M10 11v6", "M14 11v6", "M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13", "M9 7V4h6v3"],
+  logout: ["M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3", "M10 17l5-5-5-5", "M15 12H4"],
+  sparkle: ["M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z", "M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"],
+  mail: ["M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M3.5 6.5 12 13l8.5-6.5"],
+  check: ["M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M8 12l3 3 5-6"],
+  wallet: ["M18 8V5.5A1.5 1.5 0 0 0 16.5 4H6a2 2 0 0 0 0 4", "M4 6v12a2 2 0 0 0 2 2h14V8H6", "M16 14h1.5"],
+  camera: ["M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z", "M12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"],
+  chat: ["M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 9.5h8", "M8 12.5h5"],
+  pin: ["M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z", "M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"],
+  clock: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "M12 7v5l3 2"],
+  calendar: ["M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M4 10h16", "M8 3v4", "M16 3v4"],
+  gift: ["M4 9h16v4H4z", "M5 13h14v8H5z", "M12 9v12", "M12 9C10.5 6 7 5 7 7.2S10 9 12 9zm0 0c1.5-3 5-4 5-1.8S14 9 12 9z"],
+  eye: ["M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  ring: ["M12 21a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13z", "M9 5l1.5-2.5h3L15 5l-3 3z"],
+  heart: ["M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"],
+  cross: ["M12 3v18", "M7 8h10"],
+  cake: ["M4 21h16", "M5 21v-7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7", "M5 16.5c2 1.2 3.5 1.2 5 0s3.5-1.2 5 0 3 1.2 4 0", "M12 13V9", "M12 6.5c-.9-.9-.9-2 0-3.2.9 1.2.9 2.3 0 3.2z"],
+  crescent: ["M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10z", "M18 4l.6 1.6L20 6l-1.4.4L18 8l-.6-1.6L16 6l1.4-.4z"],
+  drum: ["M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3z", "M5 7v9c0 1.7 3.1 3 7 3s7-1.3 7-3V7", "M5.5 10 9 18.6", "M18.5 10 15 18.6", "M12 10v9"],
+  venue: ["M3 21h18", "M5 21V9l7-5 7 5v12", "M9.5 21v-5.5h5V21", "M12 11h.01"],
+  food: ["M3 12h18a9 8 0 0 1-18 0z", "M8 8c0-1.4 1-1.8 1-3.2", "M12 8c0-1.4 1-1.8 1-3.2", "M16 8c0-1.4 1-1.8 1-3.2"],
+  flower: ["M12 13.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M12 9.5C11 6.5 12 4 12 4s1 2.5 0 5.5zM12 13.5c-1 3 0 5.5 0 5.5s1-2.5 0-5.5zM10 11.5C7 10.5 4.5 11.5 4.5 11.5s2.5 1 5.5 0zM14 11.5c3 1 5.5 0 5.5 0S17 10.5 14 11.5z", "M12 19v2.5"],
+  outfit: ["M9 3l3 2 3-2 5 3.5-2.5 3.5-2-1V21H8.5V9L6.5 10 4 6.5z"],
+  music: ["M9 18V5l11-2v13", "M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", "M20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"],
+  bus: ["M6 3h12a2 2 0 0 1 2 2v12H4V5a2 2 0 0 1 2-2z", "M4 11h16", "M7 20v-3", "M17 20v-3", "M7.5 14h1", "M15.5 14h1"],
+  box: ["M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z", "M3 7.5 12 12l9-4.5", "M12 12v9"],
+  flag: ["M5 21V4", "M5 4h12l-2.5 4L17 12H5"],
+  half: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "M12 3v18", "M12 6a6 6 0 0 1 0 12"],
+  list: ["M9 3.5h6v3H9z", "M7 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1", "M9 12h6", "M9 16h4"],
+  seedling: ["M12 21v-9", "M12 12c0-4-3-6-7-6 0 4 3 6 7 6z", "M12 14c0-3 2.5-5 6-5 0 3.5-2.5 5-6 5z"],
+  hourglass: ["M7 3h10", "M7 21h10", "M8 3c0 5 8 5 8 9s-8 4-8 9", "M16 3c0 5-8 5-8 9s8 4 8 9"],
+  flame: ["M12 22c3.9 0 7-2.8 7-6.8 0-4-3-6-4-10.2-2 1.8-3 3.8-3 6-1-.8-2-2-2-3.8C8 9 5 11.8 5 15.2 5 19.2 8.1 22 12 22z"],
+  play: ["M8 5l11 7-11 7z"],
+  share: ["M12 3v12", "M8 7l4-4 4 4", "M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"],
+  more: ["M5 12h.01", "M12 12h.01", "M19 12h.01"],
+  image: ["M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M3.5 16.5 8 12l4 4 3-3 5.5 5.5", "M15.5 9h.01"],
+  whatsapp: ["M4 20l1.3-3.9A8.5 8.5 0 1 1 8.6 19z", "M9 9.2c0 3 2.8 5.8 5.8 5.8l1.2-1.4-1.9-1-1 .8c-1-.4-2.1-1.5-2.5-2.5l.8-1-1-1.9z"],
+  sms: ["M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 10.5h.01", "M12 10.5h.01", "M16 10.5h.01"],
+  handshake: ["M3 11l4-4 4 2 3-2 7 4", "M3 11l6 6c.8.8 2 .8 2.8 0l5.2-5", "M10 14l2 2", "M12.5 11.5l2 2"],
+  party: ["M4 20l5-13 8 8z", "M9 7c1.5 3 4.5 6 8 8", "M15 4.5l.5 2", "M19.5 9l-2 .5", "M18 4l-1.5 2"],
 };
+function icon(name, cls = "") {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "1.8",
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false", class: `icon ${cls}`.trim() })) svg.setAttribute(k, v);
+  for (const d of ICON_PATHS[name] ?? ICON_PATHS.sparkle) {
+    const p = document.createElementNS(SVG_NS, "path"); p.setAttribute("d", d); svg.append(p);
+  }
+  return svg;
+}
+
+const EVENT_ICONS = {
+  WEDDING: "ring", NAMING_CEREMONY: "heart", COMMUNION: "cross", BIRTHDAY: "cake",
+  RELIGIOUS_CEREMONY: "crescent", FAMILY_REUNION: "users", TRADITIONAL_CEREMONY: "drum", CUSTOM: "sparkle",
+};
+const eventIcon = (type, cls = "") => icon(EVENT_ICONS[type] ?? "sparkle", cls);
 
 
 /* ---------- Écrans (conformes aux maquettes du dossier maquettes/) ---------- */
@@ -914,7 +977,7 @@ const bare = (...children) => h("main", { class: "screen no-nav", id: "contenu" 
 
 function passwordField(label, name, autocomplete, help) {
   const input = h("input", { class: "input", type: "password", name, id: `f-${name}`, required: true, minlength: 8, autocomplete });
-  const toggle = h("button", { type: "button", "aria-label": "Afficher", title: "Afficher les caractères", "aria-pressed": "false" }, "👁");
+  const toggle = h("button", { type: "button", "aria-label": "Afficher", title: "Afficher les caractères", "aria-pressed": "false" }, icon("eye"));
   toggle.addEventListener("click", () => {
     const visible = input.type === "password";
     input.type = visible ? "text" : "password";
@@ -1108,7 +1171,7 @@ function eventCard(e, familyName, progress = null) {
     bar.querySelector(".bar span").style.width = `${progress}%`;
   }
   return h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}`, class: "event-card", dataset: { search: [e.title, e.city, EVENT_TYPES[e.type], familyName].filter(Boolean).join(" ").toLowerCase() } },
-    h("span", { class: "thumb", "aria-hidden": "true" }, EVENT_ICONS[e.type] ?? "✨", photo(coverOf(e), 160, 160)),
+    h("span", { class: "thumb", "aria-hidden": "true" }, eventIcon(e.type), photo(coverOf(e), 160, 160)),
     h("span", { class: "grow" },
       h("span", { class: "title" }, e.title),
       h("span", { class: "sub" }, [e.startsAt ? shortLongDate(e.startsAt) : "Date à fixer", e.city].filter(Boolean).join(" • ")),
@@ -1412,7 +1475,7 @@ async function newEventScreen(presetFid, presetType) {
             h("legend", { class: "sr-only" }, "Type d'événement"),
             Object.entries(EVENT_TYPES).map(([value, label]) => h("label", {},
               h("input", { type: "radio", name: "type", value, checked: state.type === value }),
-              h("span", { class: "tile" }, h("span", { class: "ico", "aria-hidden": "true" }, EVENT_ICONS[value]), label))))];
+              h("span", { class: "tile" }, h("span", { class: "ico", "aria-hidden": "true" }, eventIcon(value)), label))))];
       case 1:
         return [h("h2", {}, "Informations de base"),
           families.length > 1 ? field("Famille", { name: "familyId", tag: "select", class: "input", options: families.map((f) => [f.id, f.name]) }) : null,
@@ -1595,9 +1658,9 @@ function editEventForm(fid, eid, e, base) {
 const TASK_STATUS = { todo: "À faire", doing: "En cours", done: "Terminée" };
 const TASK_CHIP = { todo: "chip-orange", doing: "chip-blue", done: "chip-green" };
 const EXPENSE_CATEGORIES = {
-  VENUE: ["Salle et lieu", "🏛️"], CATERING: ["Traiteur et repas", "🍲"], DECOR: ["Décoration", "💐"],
-  OUTFITS: ["Tenues", "👗"], PHOTO: ["Photo et vidéo", "📷"], MUSIC: ["Animation et musique", "🥁"],
-  TRANSPORT: ["Transport", "🚐"], GIFTS: ["Cadeaux et dons", "🎁"], OTHER: ["Divers", "📦"],
+  VENUE: ["Salle et lieu", "venue"], CATERING: ["Traiteur et repas", "food"], DECOR: ["Décoration", "flower"],
+  OUTFITS: ["Tenues", "outfit"], PHOTO: ["Photo et vidéo", "camera"], MUSIC: ["Animation et musique", "music"],
+  TRANSPORT: ["Transport", "bus"], GIFTS: ["Cadeaux et dons", "gift"], OTHER: ["Divers", "box"],
 };
 const EXPENSE_STATUS = { pending: "À payer", paid: "Payée" };
 const EXPENSE_CHIP = { pending: "chip-orange", paid: "chip-green" };
@@ -2015,7 +2078,7 @@ async function budgetPanel(ctx, view) {
         filterChips([["all", "Toutes"], ["paid", "Payées"], ["pending", "À payer"]], filter, (k) => { filter = k; draw(); }),
         shown.length ? h("ul", { class: "list card-flat" }, shown.map((x) => h("li", {},
           h("a", { href: `${base}/budget/depense/${enc(x.id)}`, class: "item" },
-            h("span", { class: "cat-ico", "aria-hidden": "true" }, EXPENSE_CATEGORIES[x.category][1]),
+            h("span", { class: "cat-ico", "aria-hidden": "true" }, icon(EXPENSE_CATEGORIES[x.category][1])),
             h("span", { class: "grow" }, h("span", { class: "title" }, x.label),
               h("span", { class: "sub" }, [EXPENSE_CATEGORIES[x.category][0], x.supplier, shortDate(x.spentAt)].filter(Boolean).join(" · "))),
             h("span", { class: "amount" }, h("strong", {}, formatAmount(x.amount, event.currency)), chip(EXPENSE_CHIP[x.status], EXPENSE_STATUS[x.status]))))))
@@ -2024,7 +2087,7 @@ async function budgetPanel(ctx, view) {
     draw();
     body = h("div", { class: "form" },
       cats.length ? h("section", { class: "card" }, h("h2", {}, "Répartition des dépenses"), h("ul", { class: "list" }, cats.map(([c, v]) =>
-        h("li", { class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, EXPENSE_CATEGORIES[c][1]),
+        h("li", { class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, icon(EXPENSE_CATEGORIES[c][1])),
           h("span", { class: "grow" }, h("span", { class: "title" }, EXPENSE_CATEGORIES[c][0]), h("span", { class: "sub" }, formatAmount(v, event.currency))),
           h("strong", {}, `${pct(v, totals.spent)} %`))))) : null,
       listBox,
@@ -2281,24 +2344,53 @@ const INVITE_LEAD = {
 };
 
 function ornamentDivider() {
-  return h("div", { class: "inv-divider", "aria-hidden": "true" }, h("span", {}), h("i", {}, "❖"), h("span", {}));
+  return h("div", { class: "inv-divider", "aria-hidden": "true" }, h("span", {}), h("i", {}), h("span", {}));
 }
 
-function invitationCard(inv, guest) {
+/** Initiales des hôtes pour le sceau : « Fatou & Mamadou » -> « F & M », « Famille Diop » -> « D ». */
+function monogram(hosts) {
+  const parts = String(hosts || "").split(/\s*(?:&|\+|,|\bet\b|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]} & ${parts[1][0]}`.toUpperCase();
+  const words = (parts[0] || "").split(/\s+/).filter((w) => !/^(famille|family|la|le|les|de|du|des)$/i.test(w));
+  return (words[0]?.[0] ?? "").toUpperCase();
+}
+
+/** Arabesque dorée posée dans les coins des modèles Royal et Ivoire. */
+function cornerFlourish(pos) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 80 80", class: `inv-corner ${pos}`, "aria-hidden": "true", fill: "none", stroke: "currentColor", "stroke-width": "1.2", "stroke-linecap": "round" })) svg.setAttribute(k, v);
+  for (const d of [
+    "M6 74V32C6 17.6 17.6 6 32 6h42",
+    "M13 74V38c0-13.8 11.2-25 25-25h36",
+    "M24 52c0-15.5 12.5-28 28-28",
+    "M24 38c-6-1-9-6-7-11 5 0 8 4 7 11zM38 24c-1-6-6-9-11-7 0 5 4 8 11 7z",
+    "M19 19l3.5-3.5L26 19l-3.5 3.5z",
+  ]) { const p = document.createElementNS(SVG_NS, "path"); p.setAttribute("d", d); svg.append(p); }
+  return svg;
+}
+
+const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+function invitationCard(inv, guest, { reveal = false } = {}) {
   const theme = INVITE_THEMES[inv.theme] ? inv.theme : "royal";
   const date = inv.startsAt;
   const [withHosts, without] = INVITE_LEAD[inv.type] ?? INVITE_LEAD.CUSTOM;
   const place = [inv.venue, inv.city].filter(Boolean).join(", ");
   const weekday = date ? I18N.dateFormat({ weekday: "long" }).format(date) : null;
-  const card = h("section", { class: `invitation theme-${theme}`, "aria-label": `Carton d'invitation : ${inv.title}` },
-    theme === "photo" ? photoBackground(h("div", { class: "inv-photo", "aria-hidden": "true" }), inv.cover && PHOTOS[inv.cover] ? inv.cover : (COVERS[inv.type] ?? COVERS.CUSTOM)[0], 900, 560,
-      "linear-gradient(180deg, rgba(30,15,69,0) 40%, rgba(30,15,69,.55))") : null,
-    theme === "royal" || theme === "ivoire" ? [h("span", { class: "orn orn-tl", "aria-hidden": "true" }), h("span", { class: "orn orn-br", "aria-hidden": "true" })] : null,
+  // « Paul et Larissa » + « Mariage de Paul et Larissa » : le titre répéterait les noms, on ne le garde pas.
+  const showTitle = !inv.hosts || !norm(inv.title).includes(norm(inv.hosts));
+  const initials = monogram(inv.hosts);
+  const seal = h("span", { class: "inv-seal", "aria-hidden": "true" }, initials ? h("span", {}, initials) : eventIcon(inv.type));
+  const card = h("section", { class: `invitation theme-${theme}${reveal ? " inv-reveal" : ""}`, "aria-label": `Carton d'invitation : ${inv.title}` },
+    theme === "photo" ? photoBackground(h("div", { class: "inv-photo", "aria-hidden": "true" }), inv.cover && PHOTOS[inv.cover] ? inv.cover : (COVERS[inv.type] ?? COVERS.CUSTOM)[0], 900, 640,
+      "linear-gradient(180deg, rgba(30,15,69,0) 55%, rgba(30,15,69,.35))") : null,
+    theme === "royal" || theme === "ivoire" ? ["tl", "tr", "bl", "br"].map(cornerFlourish) : null,
     h("div", { class: "inv-inner" },
+      seal,
       h("p", { class: "inv-kicker" }, EVENT_TYPES[inv.type] ?? "Invitation"),
       inv.hosts ? h("p", { class: "inv-hosts" }, inv.hosts) : null,
       h("p", { class: "inv-lead" }, inv.hosts ? withHosts : without),
-      h("p", { class: "inv-title" }, inv.title),
+      showTitle ? h("p", { class: "inv-title" }, inv.title) : null,
       ornamentDivider(),
       date ? h("div", { class: "inv-date" },
         h("span", { class: "inv-side" }, weekday),
@@ -2306,9 +2398,12 @@ function invitationCard(inv, guest) {
         h("span", { class: "inv-side" }, I18N.dateFormat({ month: "long", year: "numeric" }).format(date)))
         : h("p", { class: "inv-month" }, "Date à confirmer"),
       date ? h("p", { class: "inv-time" }, `à ${I18N.time(date, " h ")}`) : null,
-      place ? h("p", { class: "inv-place" }, h("span", { "aria-hidden": "true" }, "📍 "), place) : null,
-      inv.message ? [ornamentDivider(), h("p", { class: "inv-message" }, `« ${inv.message} »`)] : null,
-      guest ? h("p", { class: "inv-guest" }, h("span", {}, guest.household), h("span", {}, `${plural(guest.seats, "place")} réservée${guest.seats > 1 ? "s" : ""}`)) : null));
+      place ? h("p", { class: "inv-place" }, icon("pin"), h("span", {}, place)) : null,
+      inv.message ? [ornamentDivider(), h("p", { class: "inv-message" }, inv.message)] : null),
+    guest ? h("div", { class: "inv-guest" },
+      h("span", { class: "inv-guest-label" }, "Réservé pour"),
+      h("strong", {}, guest.household),
+      h("span", {}, `${plural(guest.seats, "place")} réservée${guest.seats > 1 ? "s" : ""}`)) : null);
   return card;
 }
 
@@ -2452,7 +2547,7 @@ async function rsvpScreen(fid, eid, token) {
   });
   const node = bare(
     h("div", { class: "auth-brand" }, h("img", { src: "images/logo.svg", alt: "" }), h("h1", {}, "Vous êtes invités")),
-    invitationCard(inv, guest), status, form,
+    invitationCard(inv, guest, { reveal: true }), status, form,
     h("p", { class: "muted small" }, "Votre réponse est transmise aux seuls organisateurs. Pas besoin de compte."),
     guestWishCard(fid, eid, token, guest),
     I18N.picker({ compact: true }));
@@ -2672,8 +2767,8 @@ function messageForm({ label, placeholder, button, onSend }) {
 function souvenirsTabs(ctx, current) {
   const { base } = ctx;
   return h("div", { class: "tabs", role: "tablist" },
-    h("a", { href: `${base}/souvenirs`, role: "tab", "aria-selected": String(current === "album") }, "📸 Album"),
-    h("a", { href: `${base}/souvenirs/messages`, role: "tab", "aria-selected": String(current === "messages") }, "💬 Messages"));
+    h("a", { href: `${base}/souvenirs`, role: "tab", "aria-selected": String(current === "album") }, icon("camera"), "Album"),
+    h("a", { href: `${base}/souvenirs/messages`, role: "tab", "aria-selected": String(current === "messages") }, icon("chat"), "Messages"));
 }
 
 // ─── Album photos de l'événement ──────────────────────────────────────────
@@ -2694,7 +2789,7 @@ async function albumPanel(ctx) {
     empty.hidden = shown > 0;
   }
   moreBtn.addEventListener("click", () => withBusy(moreBtn, () => loadMore().catch((err) => toast(errMsg(err)))));
-  const empty = h("div", { class: "card empty", hidden: true }, h("span", { class: "big-ico", "aria-hidden": "true" }, "📷"),
+  const empty = h("div", { class: "card empty", hidden: true }, h("span", { class: "big-ico", "aria-hidden": "true" }, icon("camera")),
     h("strong", {}, "Aucune photo pour l'instant."), h("span", {}, "Ajoutez les premières photos de l'événement : préparatifs, cérémonie, fête…"));
 
   // Ajout : plusieurs photos d'un coup, réduites dans le navigateur avant l'envoi.
@@ -2793,7 +2888,7 @@ async function messagesPanel(ctx) {
       canDelete: m.uid === myUid || isOrganizer,
       onDelete: () => souvenirs.deleteMessage(fid, eid, m.id),
     })))
-    : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, "💌"), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Vœux, souvenirs, remerciements : soyez le premier à écrire."));
+    : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, icon("mail")), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Vœux, souvenirs, remerciements : soyez le premier à écrire."));
   return h("div", { class: "form" },
     loadError, review, form,
     h("p", { class: "muted small" }, isOrganizer
@@ -2848,13 +2943,13 @@ async function familyPostsPanel(fid, family, members) {
     h("p", { class: "muted small" }, "Visible de tous les membres de la famille. Chacun peut supprimer ses messages ; un administrateur peut supprimer tous les messages."),
     posts.length
       ? h("ul", { class: "messages card" }, posts.map((p) => messageItem(p, { canDelete: p.uid === myUid || isAdmin, onDelete: () => souvenirs.deletePost(fid, p.id) })))
-      : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, "💬"), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Donnez des nouvelles, annoncez une date, remerciez : toute la famille vous lira.")));
+      : h("div", { class: "card empty" }, h("span", { class: "big-ico", "aria-hidden": "true" }, icon("chat")), h("strong", {}, "Aucun message pour l'instant."), h("span", {}, "Donnez des nouvelles, annoncez une date, remerciez : toute la famille vous lira.")));
 }
 
 /** Aperçu de l'événement : accès à l'album et au livre d'or. */
 function souvenirsTeaser(ctx) {
   return h("a", { href: `${ctx.base}/souvenirs`, class: "card souvenirs-teaser" },
-    h("span", { class: "big-ico", "aria-hidden": "true" }, "📸"),
+    h("span", { class: "big-ico", "aria-hidden": "true" }, icon("image")),
     h("span", { class: "grow" }, h("strong", {}, "Souvenirs : album et livre d'or"), h("span", { class: "muted small" }, "Partagez les photos de l'événement et laissez vos messages.")),
     h("span", { class: "chev", "aria-hidden": "true" }, "›"));
 }
@@ -2874,7 +2969,7 @@ function coverPicker(type, current) {
 /** Carte du lieu (maquette 6 « Lieu et date ») : chargée seulement au clic, pour ne rien envoyer à Google sans action. */
 function mapBlock(getPlace) {
   const box = h("div", { class: "map-box" });
-  const show = h("button", { type: "button", class: "btn btn-block" }, "📍 Afficher la carte du lieu");
+  const show = h("button", { type: "button", class: "btn btn-block" }, icon("pin"), "Afficher la carte du lieu");
   show.addEventListener("click", () => {
     const [venue, city] = getPlace();
     const q = [venue, city].map((x) => String(x || "").trim()).filter(Boolean).join(", ");
@@ -2925,15 +3020,15 @@ async function recentActivity(stats) {
     const base = `#/evenement/${enc(e.familyId)}/${enc(e.id)}`;
     for (const t of tasks) {
       const when = t.updatedAt?.toDate?.();
-      if (t.status === "done" && when) items.push({ when, icon: "✅", text: `Tâche terminée : ${t.title}`, sub: e.title, href: `${base}/tache/${enc(t.id)}` });
+      if (t.status === "done" && when) items.push({ when, icon: "check", text: `Tâche terminée : ${t.title}`, sub: e.title, href: `${base}/tache/${enc(t.id)}` });
     }
     if (e.myRole === "organizer") {
       const guests = await orga.listGuests(e.familyId, e.id).catch(() => []);
-      for (const g of guests) if (g.respondedAt) items.push({ when: g.respondedAt, icon: g.response === "yes" ? "💌" : "✉️", text: g.response === "yes" ? `${g.household} vient (${g.attending})` : `${g.household} ne viendra pas`, sub: e.title, href: `${base}/invites` });
+      for (const g of guests) if (g.respondedAt) items.push({ when: g.respondedAt, icon: g.response === "yes" ? "heart" : "mail", text: g.response === "yes" ? `${g.household} vient (${g.attending})` : `${g.household} ne viendra pas`, sub: e.title, href: `${base}/invites` });
     }
     if (["organizer", "treasurer"].includes(e.myRole)) {
       const list = await orga.listContributions(e.familyId, e.id).catch(() => []);
-      for (const c of list) if (c.createdAt) items.push({ when: c.createdAt, icon: "💰", text: `Contribution ${CONTRIB_STATUS[c.status].toLowerCase()} : ${c.kind === "inkind" ? c.item : formatAmount(c.amount, e.currency)}`, sub: `${c.anonymous ? "Anonyme" : c.displayName} · ${e.title}`, href: `${base}/budget/contributions` });
+      for (const c of list) if (c.createdAt) items.push({ when: c.createdAt, icon: "wallet", text: `Contribution ${CONTRIB_STATUS[c.status].toLowerCase()} : ${c.kind === "inkind" ? c.item : formatAmount(c.amount, e.currency)}`, sub: `${c.anonymous ? "Anonyme" : c.displayName} · ${e.title}`, href: `${base}/budget/contributions` });
     }
   }));
   return items.sort((a, b) => b.when - a.when).slice(0, 6);
@@ -3004,7 +3099,7 @@ async function homeScreen() {
     hero = h("a", { href: base, class: "next-event", dataset: { search: [e.title, e.city, EVENT_TYPES[e.type]].filter(Boolean).join(" ").toLowerCase() } },
       photoBackground(h("span", { class: "ne-photo" },
         h("span", { class: "chip chip-gold" }, countdownLabel(e.startsAt)),
-        h("span", { class: "ne-type" }, EVENT_ICONS[e.type], " ", EVENT_TYPES[e.type])), coverOf(e), 1000, 560,
+        h("span", { class: "ne-type" }, eventIcon(e.type), EVENT_TYPES[e.type])), coverOf(e), 1000, 560,
         "linear-gradient(180deg, rgba(30,15,69,.05), rgba(30,15,69,.55))"),
       h("span", { class: "ne-body" },
         h("span", { class: "ne-kicker" }, "Votre prochain événement"),
@@ -3019,14 +3114,14 @@ async function homeScreen() {
 
   // ─── Raccourcis ───
   const firstFamily = families[0];
-  const tile = (href, ico, label, sub) => h("a", { href, class: "quick" }, h("span", { class: "q-ico", "aria-hidden": "true" }, ico), h("strong", {}, label), sub ? h("span", {}, sub) : null);
+  const tile = (href, ico, label, sub) => h("a", { href, class: "quick" }, h("span", { class: "q-ico", "aria-hidden": "true" }, icon(ico)), h("strong", {}, label), sub ? h("span", {}, sub) : null);
   const quick = h("nav", { class: "quick-grid", "aria-label": "Raccourcis" },
-    tile("#/nouvel-evenement", "✨", "Nouvel événement", "avec checklist"),
+    tile("#/nouvel-evenement", "sparkle", "Nouvel événement", "avec checklist"),
     ["owner", "admin"].includes(firstFamily.myRole)
-      ? tile(`#/famille/${enc(firstFamily.id)}/inviter`, "💌", "Inviter un proche", "lien WhatsApp")
-      : tile(`#/famille/${enc(firstFamily.id)}`, "👨‍👩‍👧", "Ma famille", firstFamily.name),
-    tile("#/taches", "✅", "Mes tâches", myTasks.length ? `${myTasks.length} à faire` : "à jour"),
-    tile("#/budget", "💰", "Budget", plural(live.length, "événement")));
+      ? tile(`#/famille/${enc(firstFamily.id)}/inviter`, "mail", "Inviter un proche", "lien WhatsApp")
+      : tile(`#/famille/${enc(firstFamily.id)}`, "users", "Ma famille", firstFamily.name),
+    tile("#/taches", "check", "Mes tâches", myTasks.length ? `${myTasks.length} à faire` : "à jour"),
+    tile("#/budget", "wallet", "Budget", plural(live.length, "événement")));
 
   // ─── Mes prochaines tâches ───
   const tasksBox = myTasks.length ? h("section", {},
@@ -3049,7 +3144,7 @@ async function homeScreen() {
   if (events.length && window.matchMedia("(min-width: 900px)").matches) {
     recentActivity(stats).then((activity) => activityBox.replaceChildren(activity.length
       ? h("ul", { class: "list" }, activity.map((a) => h("li", {}, h("a", { href: a.href, class: "item" },
-        h("span", { class: "act-ico", "aria-hidden": "true" }, a.icon),
+        h("span", { class: `act-ico act-${a.icon}`, "aria-hidden": "true" }, icon(a.icon)),
         h("span", { class: "grow" }, h("span", { class: "title wrap" }, a.text), h("span", { class: "sub" }, `${a.sub} · ${relTime(a.when)}`))))))
       : h("p", { class: "muted small" }, "Rien pour l'instant : les tâches terminées, réponses d'invités et contributions apparaîtront ici.")))
       .catch(() => activityBox.replaceChildren(h("p", { class: "muted small" }, "Activité momentanément indisponible.")));
@@ -3121,7 +3216,7 @@ async function committeesSection(ctx) {
         try { await orga.deleteCommittee(fid, eid, c.id); toast("Comité supprimé"); reload(); } catch (err) { toast(errMsg(err)); }
       }));
     }
-    return h("li", { class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, "👥"),
+    return h("li", { class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, icon("users")),
       h("span", { class: "grow" }, h("span", { class: "title" }, c.name), h("span", { class: "sub" }, `${plural(c.memberNames.length, "membre")}${c.memberNames.length ? ` : ${c.memberNames.join(", ")}` : ""}`)), del);
   });
   let form = null;
@@ -3155,7 +3250,7 @@ async function familyCommittees(famEvents) {
     const list = await orga.listCommittees(e.familyId, e.id).catch(() => []);
     if (!list.length) return null;
     return h("section", {}, h("h2", {}, e.title), h("ul", { class: "list card-flat" }, list.map((c) => h("li", {},
-      h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}/participants`, class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, "👥"),
+      h("a", { href: `#/evenement/${enc(e.familyId)}/${enc(e.id)}/participants`, class: "item" }, h("span", { class: "cat-ico", "aria-hidden": "true" }, icon("users")),
         h("span", { class: "grow" }, h("span", { class: "title" }, c.name), h("span", { class: "sub" }, plural(c.memberNames.length, "membre"))),
         h("span", { class: "chev", "aria-hidden": "true" }, "›"))))));
   }));
@@ -3195,8 +3290,8 @@ async function shareGuestPanel(ctx, token) {
   }).catch((err) => qrBox.replaceChildren(h("p", { class: "muted small" }, err.message)));
   const copy = h("button", { type: "button", class: "btn btn-primary btn-sm" }, "Copier");
   copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(url); toast("Lien copié"); } catch { prompt("Copiez ce lien :", url); } });
-  const share = (href, ico, label) => h("a", { href, class: "share-btn", target: href.startsWith("http") ? "_blank" : null, rel: "noopener" }, h("span", { "aria-hidden": "true" }, ico), label);
-  const more = navigator.share ? h("button", { type: "button", class: "share-btn" }, h("span", { "aria-hidden": "true" }, "⋯"), "Plus") : null;
+  const share = (href, ico, label) => h("a", { href, class: "share-btn", target: href.startsWith("http") ? "_blank" : null, rel: "noopener" }, icon(ico), label);
+  const more = navigator.share ? h("button", { type: "button", class: "share-btn" }, icon("share"), "Plus") : null;
   more?.addEventListener("click", () => navigator.share({ title: event.title, text: T(msg), url }).catch(() => {}));
   return h("div", { class: "form" },
     subHeader(`Partager l'invitation · ${g.household}`, `${base}/invites`),
@@ -3204,9 +3299,9 @@ async function shareGuestPanel(ctx, token) {
       h("div", { class: "copy-row" }, h("input", { class: "input", value: url, readonly: true, "aria-label": "Lien personnel" }), copy)),
     h("section", { class: "card" }, h("h3", {}, "Partager sur"),
       h("div", { class: "share-row" },
-        share(g.phone ? `https://wa.me/${g.phone.replace("+", "")}?text=${encodeURIComponent(msg)}` : whatsappShareUrl(msg), "🟢", "WhatsApp"),
-        share(`mailto:?subject=${encodeURIComponent(T(`Invitation : ${event.title}`))}&body=${encodeURIComponent(T(msg))}`, "✉️", "E-mail"),
-        share(`sms:${g.phone ?? ""}?&body=${encodeURIComponent(T(msg))}`, "💬", "SMS"),
+        share(g.phone ? `https://wa.me/${g.phone.replace("+", "")}?text=${encodeURIComponent(msg)}` : whatsappShareUrl(msg), "whatsapp", "WhatsApp"),
+        share(`mailto:?subject=${encodeURIComponent(T(`Invitation : ${event.title}`))}&body=${encodeURIComponent(T(msg))}`, "mail", "E-mail"),
+        share(`sms:${g.phone ?? ""}?&body=${encodeURIComponent(T(msg))}`, "sms", "SMS"),
         more)),
     h("a", { href: `${base}/invites`, class: "btn btn-primary btn-block" }, `Voir les réponses (${answered})`));
 }
@@ -3379,7 +3474,7 @@ async function welcomeScreen() {
   welcomeSeen.set(auth.currentUser.uid);
   const name = firstName(profile?.displayName ?? auth.currentUser.displayName ?? "");
   const step = (n, ico, title, text) => h("li", { class: "welcome-step" }, h("span", { class: "n", "aria-hidden": "true" }, String(n)),
-    h("div", {}, h("h3", {}, `${ico} ${title}`), h("p", { class: "muted" }, text)));
+    h("div", {}, h("h3", {}, icon(ico, "inline"), title), h("p", { class: "muted" }, text)));
   const reset = h("button", { type: "button", class: "link-btn" }, "Réafficher les aides repliées sur toutes les pages");
   reset.addEventListener("click", () => { helpStore.reset(); toast("Les aides sont de nouveau affichées"); });
   const hero = photoBackground(h("section", { class: "welcome-hero" },
@@ -3396,11 +3491,11 @@ async function welcomeScreen() {
     h("section", {},
       h("h2", {}, "Comment ça marche"),
       h("ol", { class: "welcome-steps" },
-        step(1, "👨‍👩‍👧", "Créez ou rejoignez votre famille", "C'est l'espace commun de vos proches. Invitez-les avec un lien envoyé par WhatsApp."),
-        step(2, "💍", "Créez un événement", "Choisissez la cérémonie, la date, le lieu et le budget. Désignez les participants : organisateurs, trésorier, membres."),
-        step(3, "✅", "Répartissez les tâches", "Une checklist adaptée à la cérémonie est proposée. Chacun suit les tâches qui lui sont confiées."),
-        step(4, "💰", "Suivez le budget et les contributions", "Les dépenses, les dons promis et reçus, en argent ou en nature, et le reste à financer. Le trésorier confirme."),
-        step(5, "💌", "Invitez et recevez les réponses", "Un carton d'invitation et un lien personnel par foyer : vos invités répondent sans créer de compte."))),
+        step(1, "users", "Créez ou rejoignez votre famille", "C'est l'espace commun de vos proches. Invitez-les avec un lien envoyé par WhatsApp."),
+        step(2, "ring", "Créez un événement", "Choisissez la cérémonie, la date, le lieu et le budget. Désignez les participants : organisateurs, trésorier, membres."),
+        step(3, "check", "Répartissez les tâches", "Une checklist adaptée à la cérémonie est proposée. Chacun suit les tâches qui lui sont confiées."),
+        step(4, "wallet", "Suivez le budget et les contributions", "Les dépenses, les dons promis et reçus, en argent ou en nature, et le reste à financer. Le trésorier confirme."),
+        step(5, "mail", "Invitez et recevez les réponses", "Un carton d'invitation et un lien personnel par foyer : vos invités répondent sans créer de compte."))),
     h("section", { class: "card form" },
       h("h2", {}, "Votre vie privée"),
       h("ul", { class: "welcome-list" },
@@ -3433,7 +3528,7 @@ function installScreen() {
   const steps = (items) => h("ol", { class: "install-steps" }, items.map((t) => h("li", {}, t)));
   let main;
   if (isInstalled()) {
-    main = h("section", { class: "card form" }, h("h2", {}, "✅ Bennoo est déjà installé"), h("p", { class: "muted" }, "Vous utilisez l'application installée : elle s'ouvre depuis l'icône Bennoo de votre écran d'accueil."));
+    main = h("section", { class: "card form" }, h("h2", {}, icon("check", "inline"), "Bennoo est déjà installé"), h("p", { class: "muted" }, "Vous utilisez l'application installée : elle s'ouvre depuis l'icône Bennoo de votre écran d'accueil."));
   } else if (installPrompt) {
     const b = h("button", { type: "button", class: "btn btn-primary btn-block" }, "Installer Bennoo");
     b.addEventListener("click", async () => {
@@ -3675,22 +3770,22 @@ function milestones(event, tasks, summary, hasInvitation) {
   const progress = tasks.length ? done / tasks.length : 0;
   const b = summary.budget, g = summary.guests;
   const list = [
-    ["🎬", "C'est parti", "Événement créé", true],
-    ["📅", "Date fixée", "La date est choisie", Boolean(event.startsAt)],
-    ["📝", "Plan d'action", "Au moins 5 tâches prévues", tasks.length >= 5],
-    ["✅", "Premier pas", "Une tâche terminée", done >= 1],
-    ["🌓", "À mi-chemin", "La moitié des tâches faites", progress >= 0.5],
-    ["🏁", "Tout est prêt", "Toutes les tâches terminées", tasks.length > 0 && done === tasks.length],
-    ["🤝", "Solidarité", "Première contribution confirmée", Boolean(b && b.contributors >= 1)],
-    ["💰", "À moitié financé", "50 % du budget couvert", Boolean(b && event.budgetPlanned && b.confirmed >= event.budgetPlanned / 2)],
-    ["💌", "Invitations prêtes", "Carton publié", hasInvitation],
-    ["🎉", "Ils viennent !", "Premiers invités confirmés", Boolean(g && g.attending >= 1)],
+    ["play", "C'est parti", "Événement créé", true],
+    ["calendar", "Date fixée", "La date est choisie", Boolean(event.startsAt)],
+    ["list", "Plan d'action", "Au moins 5 tâches prévues", tasks.length >= 5],
+    ["check", "Premier pas", "Une tâche terminée", done >= 1],
+    ["half", "À mi-chemin", "La moitié des tâches faites", progress >= 0.5],
+    ["flag", "Tout est prêt", "Toutes les tâches terminées", tasks.length > 0 && done === tasks.length],
+    ["handshake", "Solidarité", "Première contribution confirmée", Boolean(b && b.contributors >= 1)],
+    ["wallet", "À moitié financé", "50 % du budget couvert", Boolean(b && event.budgetPlanned && b.confirmed >= event.budgetPlanned / 2)],
+    ["mail", "Invitations prêtes", "Carton publié", hasInvitation],
+    ["party", "Ils viennent !", "Premiers invités confirmés", Boolean(g && g.attending >= 1)],
   ];
   const got = list.filter((x) => x[3]).length;
   return h("section", { class: "card" },
     h("div", { class: "section-head" }, h("h2", {}, "Étapes franchies"), h("span", { class: "chip chip-gold" }, `${got} / ${list.length}`)),
     h("ul", { class: "badges" }, list.map(([ico, title, sub, ok]) => h("li", { class: ok ? "on" : "", title: sub },
-      h("span", { class: "b-ico", "aria-hidden": "true" }, ico), h("strong", {}, title), h("span", {}, ok ? sub : `À venir : ${sub.toLowerCase()}`)))));
+      h("span", { class: "b-ico", "aria-hidden": "true" }, icon(ico)), h("strong", {}, title), h("span", {}, ok ? sub : `À venir : ${sub.toLowerCase()}`)))));
 }
 
 // ─── « Save the date » : une image à partager sur WhatsApp ───────────────
@@ -3735,7 +3830,7 @@ function wrapText(x, text, cx, y, maxW, lh) {
 function saveTheDateCard(ctx, invitation) {
   const { event } = ctx;
   const preview = h("div", { class: "std-preview" }, h("p", { class: "muted small" }, "Une image à partager sur WhatsApp ou en statut, avec la photo de couverture, la date et la ville."));
-  const make = h("button", { type: "button", class: "btn btn-primary btn-block" }, "✨ Créer mon « Save the date »");
+  const make = h("button", { type: "button", class: "btn btn-primary btn-block" }, icon("sparkle"), "Créer mon « Save the date »");
   make.addEventListener("click", () => withBusy(make, async () => {
     const blob = await makeSaveTheDate(event, invitation?.hosts);
     if (!blob) { toast("Image impossible à créer sur ce navigateur."); return; }
@@ -3770,7 +3865,7 @@ async function programmeSection(ctx) {
       del.addEventListener("click", async () => { try { await progRef(fid, eid).doc(p.id).delete(); reload(); } catch (err) { toast(errMsg(err)); } });
     }
     return h("li", {}, h("span", { class: "tl-time" }, p.time.replace(":", " h ")),
-      h("div", { class: "tl-body" }, h("strong", {}, p.title), p.place ? h("span", { class: "muted small" }, `📍 ${p.place}`) : null), del);
+      h("div", { class: "tl-body" }, h("strong", {}, p.title), p.place ? h("span", { class: "muted small tl-place" }, icon("pin", "inline"), p.place) : null), del);
   }));
   let form = null;
   if (isOrganizer) {
@@ -3800,9 +3895,9 @@ function roadmap(ctx, tasks) {
   const { event } = ctx;
   if (!event.startsAt) return h("div", { class: "card empty" }, "La feuille de route apparaît dès que la date de l'événement est fixée.");
   const phases = [
-    ["Plus de 2 mois avant", "🌱", (d) => d > 60], ["1 à 2 mois avant", "📋", (d) => d > 30 && d <= 60],
-    ["Le dernier mois", "⏳", (d) => d > 7 && d <= 30], ["La dernière semaine", "🔥", (d) => d > 0 && d <= 7],
-    ["Le jour J et après", "🎉", (d) => d <= 0],
+    ["Plus de 2 mois avant", "seedling", (d) => d > 60], ["1 à 2 mois avant", "list", (d) => d > 30 && d <= 60],
+    ["Le dernier mois", "hourglass", (d) => d > 7 && d <= 30], ["La dernière semaine", "flame", (d) => d > 0 && d <= 7],
+    ["Le jour J et après", "party", (d) => d <= 0],
   ];
   const before = (t) => Math.round((event.startsAt - t.dueAt) / 86400000);
   const blocks = phases.map(([title, ico, test]) => {
@@ -3811,7 +3906,7 @@ function roadmap(ctx, tasks) {
     const done = list.filter((t) => t.status === "done").length;
     const bar = h("div", { class: "bar" }, h("span", {})); bar.firstChild.style.width = `${pct(done, list.length)}%`;
     return h("section", { class: `phase${done === list.length ? " complete" : ""}` },
-      h("div", { class: "phase-head" }, h("span", { class: "phase-ico", "aria-hidden": "true" }, ico),
+      h("div", { class: "phase-head" }, h("span", { class: "phase-ico", "aria-hidden": "true" }, icon(ico)),
         h("div", { class: "grow" }, h("h3", {}, title), h("span", { class: "muted small" }, `${done} / ${list.length} terminée${done > 1 ? "s" : ""}`)), bar),
       h("ul", { class: "list" }, list.map((t) => taskItem(ctx, t))));
   }).filter(Boolean);
@@ -3827,7 +3922,7 @@ function inspirations() {
   return h("section", { class: "inspire" },
     h("div", { class: "section-head" }, h("h2", {}, "Préparer…"), h("span", { class: "muted small" }, "checklist adaptée incluse")),
     h("div", { class: "inspire-row" }, items.map(([type, label]) => h("a", { href: `#/nouvel-evenement/type/${type}`, class: "inspire-card" },
-      photo(COVERS[type][0], 360, 460), h("span", { class: "inspire-label" }, h("span", { "aria-hidden": "true" }, EVENT_ICONS[type]), label)))));
+      photo(COVERS[type][0], 360, 460), h("span", { class: "inspire-label" }, h("span", { "aria-hidden": "true" }, eventIcon(type)), label)))));
 }
 
 /** Bandeau photo en tête des rubriques « Mes tâches » et « Budget ». */
@@ -3846,26 +3941,26 @@ function photoEmpty(key, title, text, action = null) {
 async function settingsScreen() {
   const profile = await data.getProfile();
   const name = profile?.displayName ?? auth.currentUser.displayName ?? "";
-  const out = h("button", { type: "button", class: "item link-row danger" }, h("span", { class: "ico", "aria-hidden": "true" }, "⎋"), h("span", { class: "grow" }, h("span", { class: "title danger" }, "Se déconnecter")));
+  const out = h("button", { type: "button", class: "item link-row danger" }, h("span", { class: "ico", "aria-hidden": "true" }, icon("logout")), h("span", { class: "grow" }, h("span", { class: "title danger" }, "Se déconnecter")));
   out.addEventListener("click", async () => { await signOut(auth); location.hash = "#/"; });
-  const row = (href, ico, title, sub) => h("li", {}, h("a", { href, class: "item" }, h("span", { class: "ico", "aria-hidden": "true" }, ico),
+  const row = (href, ico, title, sub) => h("li", {}, h("a", { href, class: "item" }, h("span", { class: "ico", "aria-hidden": "true" }, icon(ico)),
     h("span", { class: "grow" }, h("span", { class: "title" }, title), sub ? h("span", { class: "sub" }, sub) : null), h("span", { class: "chev", "aria-hidden": "true" }, "›")));
   const node = screen(
     header("Paramètres"),
     h("a", { href: "#/profil", class: "card hello profile-card" }, avatar(name, "", profile?.photo), h("div", { class: "grow" }, h("h2", {}, name), h("p", { class: "muted small" }, auth.currentUser.email)), h("span", { class: "chev", "aria-hidden": "true" }, "›")),
     h("ul", { class: "list card-flat settings" },
-      row("#/bienvenue", "📖", "Guide de Bennoo", "À quoi sert Bennoo et comment s'en servir"),
-      row("#/profil", "👤", "Mon profil", "Nom et téléphone"),
-      row("#/familles", "👨‍👩‍👧", "Familles et permissions", "Membres, rôles, invitations"),
-      row("#/installer", "📲", "Installer l'application", isInstalled() ? "Déjà installée sur cet appareil" : "Icône Bennoo sur l'écran d'accueil"),
-      row("#/conditions/confidentialite", "🔒", "Confidentialité", "Ce que voient les autres, vos droits"),
-      row("#/conditions/cgu", "📄", "Conditions d'utilisation et mentions légales", null),
-      h("li", {}, h("div", { class: "item lang-row" }, h("span", { class: "ico", "aria-hidden": "true" }, "🌐"),
+      row("#/bienvenue", "book", "Guide de Bennoo", "À quoi sert Bennoo et comment s'en servir"),
+      row("#/profil", "user", "Mon profil", "Nom et téléphone"),
+      row("#/familles", "users", "Familles et permissions", "Membres, rôles, invitations"),
+      row("#/installer", "install", "Installer l'application", isInstalled() ? "Déjà installée sur cet appareil" : "Icône Bennoo sur l'écran d'accueil"),
+      row("#/conditions/confidentialite", "lock", "Confidentialité", "Ce que voient les autres, vos droits"),
+      row("#/conditions/cgu", "file", "Conditions d'utilisation et mentions légales", null),
+      h("li", {}, h("div", { class: "item lang-row" }, h("span", { class: "ico", "aria-hidden": "true" }, icon("globe")),
         h("span", { class: "grow" }, h("span", { class: "title" }, "Langue"), h("span", { class: "sub" }, "Choisissez la langue de Bennoo sur cet appareil."),
           I18N.picker(),
           I18N.lang === "wo" ? h("span", { class: "sub" }, "Le wolof est en bêta : une partie des textes reste en français, et les traductions doivent encore être relues.") : null))),
       h("li", {}, out),
-      h("li", {}, h("a", { href: "#/supprimer-compte", class: "item danger" }, h("span", { class: "ico", "aria-hidden": "true" }, "🗑"),
+      h("li", {}, h("a", { href: "#/supprimer-compte", class: "item danger" }, h("span", { class: "ico", "aria-hidden": "true" }, icon("trash")),
         h("span", { class: "grow" }, h("span", { class: "title danger" }, "Supprimer mon compte"), h("span", { class: "sub" }, "Définitif")), h("span", { class: "chev", "aria-hidden": "true" }, "›")))),
   );
   return { node, title: "Paramètres", nav: "more" };

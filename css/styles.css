@@ -694,3 +694,116 @@ label.btn.disabled { opacity: .55; pointer-events: none; }
 .souvenirs-teaser { display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit; background: linear-gradient(135deg, var(--violet-50), #fff); }
 .souvenirs-teaser .grow { display: flex; flex-direction: column; gap: 2px; }
 .souvenirs-teaser .chev { color: var(--violet-700); font-size: 1.4rem; }
+
+/* ═══ Icônes au trait (19/11/2026) : un seul jeu, violet et or, à la place des émojis ═══ */
+.icon { width: 1.25em; height: 1.25em; flex: none; vertical-align: -.22em; }
+.icon.inline { width: 1.15em; height: 1.15em; margin-right: .45em; color: var(--violet-600); }
+.settings .item .ico .icon, .phase-ico .icon { width: 20px; height: 20px; color: var(--violet-700); }
+.settings .item.danger .ico, .settings .link-row.danger .ico { background: var(--red-bg); }
+.settings .item.danger .ico .icon, .settings .link-row.danger .ico .icon { color: var(--red); }
+.quick .q-ico .icon { width: 22px; height: 22px; color: var(--violet-800); }
+.cat-ico .icon { width: 20px; height: 20px; color: #7a4a0a; }
+.act-ico .icon { width: 18px; height: 18px; color: var(--violet-700); }
+.act-ico.act-check { background: var(--green-bg); } .act-check .icon { color: var(--green); }
+.act-ico.act-wallet { background: var(--gold-200); } .act-wallet .icon { color: #7a4a0a; }
+.act-ico.act-heart { background: #fde8ef; } .act-heart .icon { color: #be185d; }
+.type-grid .tile .ico .icon { width: 30px; height: 30px; color: var(--violet-700); }
+.type-grid input:checked + .tile .ico .icon { color: var(--gold-400); }
+.thumb > .icon { position: relative; z-index: 1; width: 26px; height: 26px; color: #fff; filter: drop-shadow(0 1px 3px rgba(0,0,0,.45)); }
+.ne-type { display: inline-flex; align-items: center; gap: 5px; }
+.ne-type .icon { width: 15px; height: 15px; color: var(--gold-600); }
+.inspire-label .icon { width: 22px; height: 22px; color: var(--gold-400); }
+.b-ico .icon { width: 26px; height: 26px; color: var(--gold-600); }
+.badges li:not(.on) .b-ico .icon { color: var(--muted); }
+.big-ico .icon { width: 40px; height: 40px; color: var(--violet-400); stroke-width: 1.4; }
+.share-btn .icon { width: 26px; height: 26px; color: var(--violet-700); }
+.share-btn[href^="https://wa.me"] .icon { color: #1b7a3d; }
+.password button .icon { width: 20px; height: 20px; }
+.tabs a .icon { width: 18px; height: 18px; margin-right: 6px; }
+.tabs a:has(.icon) { display: flex; align-items: center; justify-content: center; }
+.btn .icon { width: 18px; height: 18px; margin-right: 6px; }
+.btn:has(.icon) { display: inline-flex; align-items: center; justify-content: center; }
+.btn-block:has(.icon) { display: flex; }
+.tl-place { display: inline-flex; align-items: center; }
+.tl-place .icon.inline { width: 14px; height: 14px; margin-right: 4px; color: var(--gold-600); }
+.welcome-step h3 { display: flex; align-items: center; }
+.souvenirs-teaser .big-ico .icon { width: 30px; height: 30px; color: var(--violet-700); }
+
+/* ═══ Carton d'invitation v3 (19/11/2026) ═════════════════════════════════
+   Sceau aux initiales des hôtes, arabesques dorées aux quatre coins (Royal, Ivoire),
+   bandeaux géométriques (Wax), photo en arche (Photo), talon « Réservé pour » détachable. */
+.invitation { --gold: #e8b84a; --gold-deep: #a67c1f; isolation: isolate; }
+.invitation .inv-inner { padding: 30px 30px 30px; gap: 6px; }
+.inv-seal { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 6px;
+  background: radial-gradient(circle at 35% 30%, #f8dc8f, #d4a23a 55%, #9a6b14); color: #3b2405;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.18), 0 0 0 4px var(--gold), 0 6px 16px rgba(0,0,0,.25); }
+.inv-seal span { font-family: "Great Vibes", "Snell Roundhand", cursive; font-size: 1.45rem; line-height: 1; letter-spacing: .5px; white-space: nowrap; }
+.inv-seal .icon { width: 28px; height: 28px; color: #3b2405; }
+.inv-kicker { letter-spacing: .32em; font-size: .68rem; }
+.inv-hosts { font-size: clamp(2.4rem, 11vw, 3.2rem); margin: 2px 0 0; }
+.inv-lead { font-size: 1.18rem; line-height: 1.35; max-width: 26ch; }
+.inv-title { font-size: 1.3rem; }
+.inv-divider { width: 62%; margin: 10px 0 6px; }
+.inv-divider i { width: 7px; height: 7px; transform: rotate(45deg); background: currentColor; box-shadow: 0 0 0 3px transparent; outline: 1px solid currentColor; outline-offset: 3px; opacity: .8; }
+.inv-date { margin-top: 2px; }
+.inv-time { margin-top: 2px; }
+.inv-place { display: inline-flex; align-items: center; gap: 6px; font-size: .95rem; max-width: 30ch; }
+.inv-place .icon { width: 16px; height: 16px; color: var(--gold); flex: none; }
+.inv-message { font-size: 1.2rem; line-height: 1.45; quotes: "«\00a0" "\00a0»"; }
+html[lang="en"] .inv-message { quotes: "\201C" "\201D"; }
+.inv-message::before { content: open-quote; } .inv-message::after { content: close-quote; }
+.inv-corner { position: absolute; width: 74px; height: 74px; z-index: 0; color: var(--gold); opacity: .9; pointer-events: none; }
+.inv-corner.tl { top: 8px; left: 8px; } .inv-corner.tr { top: 8px; right: 8px; transform: scaleX(-1); }
+.inv-corner.bl { bottom: 8px; left: 8px; transform: scaleY(-1); } .inv-corner.br { bottom: 8px; right: 8px; transform: scale(-1); }
+.invitation:has(.inv-guest) .inv-corner.bl, .invitation:has(.inv-guest) .inv-corner.br { bottom: 92px; }
+
+/* Talon détachable « Réservé pour » */
+.inv-guest { position: relative; margin: 0 !important; border-radius: 0 !important; padding: 16px 20px 18px !important; display: flex; flex-direction: column; align-items: center; gap: 1px; z-index: 1;
+  border: 0 !important; border-top: 2px dashed currentColor !important; background: rgba(255,255,255,.08); }
+.inv-guest::before, .inv-guest::after { content: ""; position: absolute; top: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--page-bg, #fff); }
+.inv-guest::before { left: -11px; } .inv-guest::after { right: -11px; }
+.inv-guest-label { font: 600 .66rem/1 Poppins, sans-serif; letter-spacing: .28em; text-transform: uppercase; opacity: .75; }
+.inv-guest strong { font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.35rem; font-weight: 700; }
+.inv-guest span:last-child { font-size: .85rem; opacity: .85; }
+
+/* Royal : nuit violette, filet doré intérieur */
+.theme-royal { box-shadow: inset 0 0 0 1px rgba(232,184,74,.55), inset 0 0 0 7px #2a0f5e, inset 0 0 0 8px rgba(232,184,74,.35), 0 18px 44px rgba(30,15,69,.35); }
+.theme-royal .inv-hosts { background: linear-gradient(180deg, #fde9b0, #e8b84a 55%, #c6922c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.theme-royal .inv-guest { color: #fbe7b5; background: rgba(0,0,0,.18); }
+.theme-royal .inv-guest strong { color: #fff; }
+
+/* Ivoire : papier crème, filet double, arabesques bronze */
+.theme-ivoire { --gold: #b8913a; background: radial-gradient(120% 70% at 50% 0%, #fffefa, #f6eddb); }
+.theme-ivoire .inv-corner { opacity: .75; }
+.theme-ivoire .inv-seal { box-shadow: 0 0 0 3px #fffaf0, 0 0 0 4px #d9b96a, 0 5px 12px rgba(120,90,30,.25); }
+.theme-ivoire .inv-guest { color: #6b5320; background: #fbf5e9; }
+
+/* Photo : la photo de couverture dans une arche, le sceau à cheval */
+.theme-photo { background: linear-gradient(180deg, #f6f3ff 0, #fff 40%); }
+.theme-photo .inv-photo { height: 230px; margin: 16px 16px 0; border-radius: 999px 999px 18px 18px; box-shadow: 0 0 0 4px #fff, 0 0 0 5px var(--gold-400); }
+.theme-photo .inv-inner { margin-top: -38px; background: transparent; padding-top: 0; }
+.theme-photo .inv-seal { box-shadow: 0 0 0 4px #fff, 0 0 0 5px var(--gold), 0 6px 14px rgba(46,16,101,.25); }
+.theme-photo .inv-guest { color: var(--violet-800); background: var(--violet-50); }
+
+/* Wax : bandeaux géométriques terre, indigo et or en haut et en bas */
+.theme-wax { --gold: #c27c0e; border: 0; padding: 0; background: #fff4e2; }
+.theme-wax::before { opacity: .06; }
+.theme-wax::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 26px; z-index: 0; pointer-events: none;
+  background: linear-gradient(45deg, #b45309 25%, transparent 25%) 0 0 / 26px 26px, linear-gradient(-45deg, #b45309 25%, transparent 25%) 0 0 / 26px 26px,
+    linear-gradient(45deg, transparent 75%, #1e3a8a 75%) 0 0 / 26px 26px, linear-gradient(-45deg, transparent 75%, #1e3a8a 75%) 0 0 / 26px 26px, #e8b84a;
+  box-shadow: 0 2px 0 #7c2d12; }
+.theme-wax .inv-inner { padding-top: 48px; padding-bottom: 46px; }
+.theme-wax .inv-inner::after { content: ""; position: absolute; left: -30px; right: -30px; bottom: 0; height: 22px; z-index: -1;
+  background: repeating-linear-gradient(90deg, #1e3a8a 0 13px, #e8b84a 13px 18px, #b45309 18px 31px, #e8b84a 31px 36px); box-shadow: 0 -2px 0 #7c2d12; }
+.theme-wax .inv-hosts { color: #9a3412; }
+.theme-wax .inv-seal { background: radial-gradient(circle at 35% 30%, #fbbf24, #c2410c 60%, #7c2d12); color: #fff4e2; box-shadow: 0 0 0 3px #fff4e2, 0 0 0 5px #1e3a8a, 0 6px 14px rgba(124,45,18,.3); }
+.theme-wax .inv-seal span, .theme-wax .inv-seal .icon { color: #fff4e2; }
+.theme-wax .inv-guest { color: #7c2d12; background: #fde7c6; }
+
+/* Une seule animation : le carton qui s'ouvre, sur la page de réponse des invités */
+@media (prefers-reduced-motion: no-preference) {
+  .inv-reveal { animation: invRise .9s cubic-bezier(.2,.8,.2,1) both; }
+  .inv-reveal .inv-seal { animation: invSeal .7s .55s cubic-bezier(.3,1.6,.5,1) both; }
+}
+@keyframes invRise { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes invSeal { from { opacity: 0; transform: scale(.4) rotate(-20deg); } to { opacity: 1; transform: none; } }
